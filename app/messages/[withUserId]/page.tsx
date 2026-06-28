@@ -7,7 +7,7 @@ import {
   sendDirectMessage,
 } from "@/lib/actions/messages";
 
-export const metadata = { title: "Message · Yukti AI Labs" };
+export const metadata = { title: "Message · Karya Sanga" };
 
 /**
  * One-on-one DM thread.

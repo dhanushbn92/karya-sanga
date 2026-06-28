@@ -110,7 +110,7 @@ model User {
   @@map("User")
 }
 
-/// A cohort run of the Yukti AI Lab workshop. Per the spec: "Cohort 4 · Aug 2026".
+/// A cohort run of the Karya Sanga workshop. Per the spec: "Cohort 4 · Aug 2026".
 /// Members are linked via User.cohortId.
 model Cohort {
   id          String   @id @default(cuid())

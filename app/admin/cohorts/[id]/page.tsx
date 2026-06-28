@@ -498,11 +498,11 @@ export default async function CohortEditPage({
           <p className="text-[11px] text-on-surface-variant">
             Password pattern:{" "}
             <code className="rounded bg-surface-container px-1.5">
-              firstname@yukti&lt;DDMM&gt;
+              firstname@karya&lt;DDMM&gt;
             </code>{" "}
             if a date of birth is provided, otherwise{" "}
             <code className="rounded bg-surface-container px-1.5">
-              firstname@yukti&lt;YY&gt;
+              firstname@karya&lt;YY&gt;
             </code>
             . Up to 200 people per batch.
           </p>

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-export const metadata = { title: "Messages · Yukti AI Labs" };
+export const metadata = { title: "Messages · Karya Sanga" };
 
 /**
  * Inbox — every conversation this user is part of, newest activity first.

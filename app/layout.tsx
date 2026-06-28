@@ -27,9 +27,9 @@ const baloo2 = Baloo_2({
 });
 
 export const metadata: Metadata = {
-  title: "Yukti AI Labs · Anaadi Foundation",
+  title: "Karya Sanga · Anaadi Foundation",
   description:
-    "An online workshop and hackathon platform combining AI with ESP32 electronics. Yukti AI Labs, an initiative of Anaadi Foundation.",
+    "An online workshop and hackathon platform combining AI with ESP32 electronics. Karya Sanga, an initiative of Anaadi Foundation.",
   // Using the Anaadi mark as the favicon. The PNG lives at /public/ so it
   // ships unchanged from whatever the user dropped in.
   icons: {

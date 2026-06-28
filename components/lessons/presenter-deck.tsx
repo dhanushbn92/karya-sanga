@@ -132,7 +132,7 @@ export function PresenterDeck({
           />
           <div className="leading-tight">
             <div className="text-base font-bold text-primary">
-              Yukti AI Labs
+              Karya Sanga
             </div>
             <div className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
               {lessonModule}

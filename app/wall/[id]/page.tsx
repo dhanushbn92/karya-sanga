@@ -13,7 +13,7 @@ import { LessonBody } from "@/components/lessons/lesson-body";
 import { MediaEmbed } from "@/components/gallery/media-embed";
 import { WallRealtime } from "@/components/wall/wall-realtime";
 
-export const metadata = { title: "Post · Show & Tell · Yukti AI Labs" };
+export const metadata = { title: "Post · Show & Tell · Karya Sanga" };
 
 const REACTION_TYPES = ["clap", "love", "idea"] as const;
 type ReactionTypeName = (typeof REACTION_TYPES)[number];

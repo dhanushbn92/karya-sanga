@@ -1,5 +1,5 @@
 -- ============================================================
--- Yukti AI Labs — SCHEMA BASELINE
+-- Karya Sanga — SCHEMA BASELINE
 -- ============================================================
 -- Generated: 2026-06-28
 -- This file is the full Prisma schema as a single SQL script

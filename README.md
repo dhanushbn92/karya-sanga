@@ -1,6 +1,6 @@
-# Yukti AI Labs — workshop platform
+# Karya Sanga — workshop platform
 
-Web platform for the Yukti AI Labs workshop, an initiative of **Anaadi Foundation**. Teaches kids to combine AI with ESP32 electronics, runs a hackathon, hosts a community photo wall, and delivers lessons. Built with Next.js 16 (App Router), TypeScript, Tailwind v4, Supabase (auth + Postgres + storage + realtime), Prisma, and shadcn/ui. Deploy target: Vercel.
+Web platform for the Karya Sanga workshop, an initiative of **Anaadi Foundation**. Teaches kids to combine AI with ESP32 electronics, runs a hackathon, hosts a community photo wall, and delivers lessons. Built with Next.js 16 (App Router), TypeScript, Tailwind v4, Supabase (auth + Postgres + storage + realtime), Prisma, and shadcn/ui. Deploy target: Vercel.
 
 ## Prerequisites
 

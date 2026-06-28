@@ -27,8 +27,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
  * params). Admins should share them with the new users out-of-band.
  *
  * Password pattern:
- *   With DOB:    <firstname>@yukti<DDMM>     (e.g. dhanush@yukti2705)
- *   Without DOB: <firstname>@yukti<YY>       (e.g. dhanush@yukti26)
+ *   With DOB:    <firstname>@karya<DDMM>     (e.g. dhanush@karya2705)
+ *   Without DOB: <firstname>@karya<YY>       (e.g. dhanush@karya26)
  *
  * Both meet Supabase's default 8+ char rule and include an `@` so the user's
  * password manager won't auto-clear it as a weak pattern.
@@ -54,10 +54,10 @@ function generatePassword(name: string, email: string, dob: Date | null): string
   if (dob) {
     const dd = String(dob.getUTCDate()).padStart(2, "0");
     const mm = String(dob.getUTCMonth() + 1).padStart(2, "0");
-    return `${first}@yukti${dd}${mm}`;
+    return `${first}@karya${dd}${mm}`;
   }
   const yy = String(new Date().getUTCFullYear()).slice(-2);
-  return `${first}@yukti${yy}`;
+  return `${first}@karya${yy}`;
 }
 
 function parseRow(line: string): {

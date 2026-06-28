@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { LessonBody } from "@/components/lessons/lesson-body";
 import { MarkCompleteButton } from "@/components/lessons/mark-complete-button";
 
-export const metadata = { title: "Lesson · Yukti AI Labs" };
+export const metadata = { title: "Lesson · Karya Sanga" };
 
 const DIFFICULTY_TONE: Record<string, string> = {
   Easy: "bg-primary-fixed text-on-primary-fixed-variant",

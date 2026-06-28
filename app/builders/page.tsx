@@ -2,7 +2,7 @@ import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-export const metadata = { title: "People · Yukti AI Labs" };
+export const metadata = { title: "People · Karya Sanga" };
 
 /**
  * Builders directory (locked 2026-06-27).

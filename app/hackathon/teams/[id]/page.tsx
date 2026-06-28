@@ -12,7 +12,7 @@ import {
 } from "@/lib/actions/hackathon";
 import { getHackathonConfig } from "@/lib/hackathon-config";
 
-export const metadata = { title: "Team workspace · Yukti AI Labs" };
+export const metadata = { title: "Team workspace · Karya Sanga" };
 
 export default async function TeamWorkspacePage({
   params,

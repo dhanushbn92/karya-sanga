@@ -24,7 +24,7 @@ if (!cohort) {
     data: {
       name: "Cohort 1 · v1 launch",
       description:
-        "First Yukti AI Lab cohort using the new platform — the alumni community starts here.",
+        "First Karya Sanga cohort using the new platform — the alumni community starts here.",
       current: true,
       startedOn: new Date("2026-05-01"),
     },

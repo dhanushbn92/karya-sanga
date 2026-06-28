@@ -4,7 +4,7 @@ import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { signedLessonSlideUrl } from "@/lib/supabase/admin";
 
-export const metadata = { title: "Slides · Yukti AI Labs" };
+export const metadata = { title: "Slides · Karya Sanga" };
 
 const PDF_MIME = "application/pdf";
 const PPT_MIMES = new Set([

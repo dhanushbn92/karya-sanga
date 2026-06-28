@@ -2,7 +2,7 @@ import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-export const metadata = { title: "Lessons · Yukti AI Labs" };
+export const metadata = { title: "Lessons · Karya Sanga" };
 
 const DIFFICULTY_TONE: Record<string, string> = {
   Easy: "bg-primary-fixed text-on-primary-fixed-variant",

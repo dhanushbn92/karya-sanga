@@ -11,7 +11,7 @@ import {
 } from "@/components/wall/comment-section";
 import { WallRealtime } from "@/components/wall/wall-realtime";
 
-export const metadata = { title: "Show & Tell · Yukti AI Labs" };
+export const metadata = { title: "Show & Tell · Karya Sanga" };
 
 const REACTION_TYPES = ["clap", "love", "idea"] as const;
 type ReactionTypeName = (typeof REACTION_TYPES)[number];

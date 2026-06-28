@@ -27,7 +27,7 @@ export default function AuthLayout({
           />
           <div>
             <div className="text-headline-md font-black text-primary">
-              Yukti AI Labs
+              Karya Sanga
             </div>
             <div className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
               An initiative of Anaadi Foundation

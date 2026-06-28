@@ -8,7 +8,7 @@ import {
   type ComponentTone,
 } from "@/lib/components-catalog";
 
-export const metadata = { title: "Component · Yukti AI Labs" };
+export const metadata = { title: "Component · Karya Sanga" };
 
 const TONE_BG: Record<ComponentTone, string> = {
   primary: "bg-primary-fixed",

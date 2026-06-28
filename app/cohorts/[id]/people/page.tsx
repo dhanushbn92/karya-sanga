@@ -4,7 +4,7 @@ import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { MessageButton } from "@/components/ui/message-button";
 
-export const metadata = { title: "People · Yukti AI Labs" };
+export const metadata = { title: "People · Karya Sanga" };
 
 const TONE_BG: Record<string, string> = {
   primary: "bg-primary-fixed text-on-primary-fixed-variant",

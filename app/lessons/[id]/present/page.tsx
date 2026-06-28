@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { splitIntoSlides } from "@/lib/slides";
 import { PresenterDeck } from "@/components/lessons/presenter-deck";
 
-export const metadata = { title: "Present · Yukti AI Labs" };
+export const metadata = { title: "Present · Karya Sanga" };
 
 /**
  * Presenter mode for a lesson. The whole route is wrapped in `dark` so it

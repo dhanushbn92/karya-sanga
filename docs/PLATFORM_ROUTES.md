@@ -1,4 +1,4 @@
-# Yukti AI Labs — Platform Route Map
+# Karya Sanga — Platform Route Map
 
 > One-sheet reference for every route in the platform. Use it for instructor onboarding, code review, or a "what lives where" lookup.
 
@@ -110,7 +110,7 @@
 | Judge (not admin) | + **Judging** |
 | Admin / instructor | + **Admin** |
 
-Brand area (left): Anaadi flame-eye mark + "Yukti AI Labs" wordmark + "An initiative of Anaadi Foundation" subtitle.
+Brand area (left): Anaadi flame-eye mark + "Karya Sanga" wordmark + "An initiative of Anaadi Foundation" subtitle.
 
 Right side: your display name (links to `/settings/profile`) + sign-out button.
 

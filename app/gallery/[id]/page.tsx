@@ -17,7 +17,7 @@ import {
   toggleProjectReaction,
 } from "@/lib/actions/gallery";
 
-export const metadata = { title: "Project · Yukti AI Labs" };
+export const metadata = { title: "Project · Karya Sanga" };
 
 const STATUS_TONE: Record<string, string> = {
   active: "bg-secondary-container text-on-secondary-container",

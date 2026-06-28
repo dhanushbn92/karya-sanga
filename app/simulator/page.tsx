@@ -5,7 +5,7 @@ import { COMPONENT_CATALOG } from "@/lib/components-catalog";
 import { DeleteSavedProject } from "@/components/simulator/delete-saved-project";
 import { SaveProjectForm } from "@/components/simulator/save-project-form";
 
-export const metadata = { title: "Simulator · Yukti AI Labs" };
+export const metadata = { title: "Simulator · Karya Sanga" };
 
 const TONE_BG: Record<string, string> = {
   primary: "bg-primary-fixed",

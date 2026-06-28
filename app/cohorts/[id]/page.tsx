@@ -11,7 +11,7 @@ import {
 } from "@/lib/actions/alumni";
 import { getHackathonConfig } from "@/lib/hackathon-config";
 
-export const metadata = { title: "Workshop · Yukti AI Labs" };
+export const metadata = { title: "Workshop · Karya Sanga" };
 
 /**
  * Workshop view (route stays at /cohorts/[id] for backward-compat with all

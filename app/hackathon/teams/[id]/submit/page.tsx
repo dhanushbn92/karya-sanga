@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { submitProject } from "@/lib/actions/submissions";
 import { getHackathonConfig } from "@/lib/hackathon-config";
 
-export const metadata = { title: "Submit · Yukti AI Labs" };
+export const metadata = { title: "Submit · Karya Sanga" };
 
 export default async function SubmitPage({
   params,

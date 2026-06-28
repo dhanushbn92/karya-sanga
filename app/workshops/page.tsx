@@ -3,7 +3,7 @@ import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { joinWorkshop } from "@/lib/actions/alumni";
 
-export const metadata = { title: "Workshops · Yukti AI Labs" };
+export const metadata = { title: "Workshops · Karya Sanga" };
 
 /**
  * Workshops listing.
@@ -135,7 +135,7 @@ export default async function WorkshopsPage({
         </div>
         <h1 className="text-headline-lg text-on-surface">Workshops</h1>
         <p className="mt-2 max-w-2xl text-on-surface-variant">
-          Your workshops first, then everything else Yukti AI Labs is
+          Your workshops first, then everything else Karya Sanga is
           running.
         </p>
       </div>

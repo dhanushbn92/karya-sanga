@@ -1,5 +1,5 @@
 /**
- * Yukti v1 component reference catalog.
+ * Karya Sanga v1 component reference catalog.
  *
  * Decision (locked at kickoff): core kit + HC-SR04 + soil moisture.
  * **No PIR motion sensor** in v1 — explicitly de-scoped by the user.

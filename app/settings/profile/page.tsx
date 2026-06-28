@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { updateMyProfile } from "@/lib/actions/alumni";
 import { ChangePasswordForm } from "@/components/auth/change-password-form";
 
-export const metadata = { title: "Edit profile · Yukti AI Labs" };
+export const metadata = { title: "Edit profile · Karya Sanga" };
 
 export default async function ProfileSettingsPage() {
   const me = await requireUser();

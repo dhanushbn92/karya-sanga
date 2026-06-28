@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { signedWallImageUrls } from "@/lib/supabase/admin";
 
 export const metadata = {
-  title: "Yukti AI Labs · An initiative of Anaadi Foundation",
+  title: "Karya Sanga · An initiative of Anaadi Foundation",
   description:
     "Where curious kids learn AI, build with electronics, and ship real projects together. Online or in person, you bring the curiosity, we bring the labs.",
 };
@@ -84,7 +84,7 @@ export default async function LandingPage() {
                 className="h-7 w-auto object-contain"
               />
               <span className="text-xs font-bold uppercase tracking-wider text-on-surface-variant">
-                Yukti AI Labs · An initiative of Anaadi Foundation
+                Karya Sanga · An initiative of Anaadi Foundation
               </span>
             </div>
 
@@ -164,7 +164,7 @@ export default async function LandingPage() {
               <div className="relative aspect-[53/28] overflow-hidden rounded-[28px] bg-gradient-to-br from-primary-fixed via-tertiary-fixed to-secondary-fixed">
                 <Image
                   src="/hero-illustration.png"
-                  alt="People learning AI at the ashram with Yukti AI Labs"
+                  alt="People learning AI at the ashram with Karya Sanga"
                   fill
                   sizes="(min-width: 1024px) 50vw, 100vw"
                   className="object-contain"
@@ -531,7 +531,7 @@ export default async function LandingPage() {
                 Curious? <br /> Come build with us.
               </h2>
               <p className="text-lg opacity-90">
-                Anaadi Foundation runs Yukti AI Labs as a community.
+                Anaadi Foundation runs Karya Sanga as a community.
                 Workshops fill quickly — make an account and your teacher
                 will add you to the next one.
               </p>
@@ -570,7 +570,7 @@ export default async function LandingPage() {
               className="h-12 w-auto object-contain"
             />
             <p className="text-xs font-bold uppercase tracking-wider text-on-surface-variant">
-              Yukti AI Labs · An initiative of Anaadi Foundation
+              Karya Sanga · An initiative of Anaadi Foundation
             </p>
             <p className="text-[11px] text-on-surface-variant">
               © {new Date().getFullYear()} Anaadi Foundation. All rights

@@ -4,7 +4,7 @@ import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { ScoreForm } from "@/components/hackathon/score-form";
 
-export const metadata = { title: "Score submission · Yukti AI Labs" };
+export const metadata = { title: "Score submission · Karya Sanga" };
 
 export default async function ScoreSubmissionPage({
   params,

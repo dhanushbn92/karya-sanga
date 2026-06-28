@@ -6,7 +6,7 @@ import { Mascot } from "@/components/ui/mascot";
 import { SpeechBubble } from "@/components/ui/speech-bubble";
 import { StatCard } from "@/components/ui/stat-card";
 
-export const metadata = { title: "Home · Yukti AI Labs" };
+export const metadata = { title: "Home · Karya Sanga" };
 
 /**
  * Logged-in Home.
@@ -351,7 +351,7 @@ export default async function HomePage() {
               Explore the rest.
             </h2>
             <p className="mt-1 text-on-surface-variant">
-              Every part of Yukti AI Labs, one click away.
+              Every part of Karya Sanga, one click away.
             </p>
           </div>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">

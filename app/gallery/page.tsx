@@ -2,7 +2,7 @@ import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-export const metadata = { title: "Projects · Yukti AI Labs" };
+export const metadata = { title: "Projects · Karya Sanga" };
 
 const STATUS_TONE: Record<string, string> = {
   active: "bg-secondary-container text-on-secondary-container",
@@ -138,7 +138,7 @@ export default async function GalleryPage({
           <span className="text-xs font-bold tracking-wide">Projects</span>
         </div>
         <h1 className="text-headline-lg text-on-surface">
-          Built by everyone at Yukti AI Labs
+          Built by everyone at Karya Sanga
         </h1>
         <p className="mt-2 max-w-2xl text-on-surface-variant">
           Every team&apos;s project across every workshop. Open one to read

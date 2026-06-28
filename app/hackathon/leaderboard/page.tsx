@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-export const metadata = { title: "Leaderboard · Yukti AI Labs" };
+export const metadata = { title: "Leaderboard · Karya Sanga" };
 
 export default async function LeaderboardPage() {
   const user = await requireUser();

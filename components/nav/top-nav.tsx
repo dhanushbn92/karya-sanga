@@ -54,7 +54,7 @@ export async function TopNav() {
           />
           <div className="hidden flex-col leading-tight sm:flex">
             <span className="text-headline-md font-black text-primary">
-              Yukti AI Labs
+              Karya Sanga
             </span>
             <span className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
               An initiative of Anaadi Foundation

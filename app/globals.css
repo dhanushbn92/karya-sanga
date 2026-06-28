@@ -5,7 +5,7 @@
 @custom-variant dark (&:is(.dark *));
 
 /* =====================================================================
- * Yukti AI Labs design system
+ * Karya Sanga design system
  *
  * Two tracks live side-by-side:
  *  - LIGHT "Youth Edition" — primary; ages ~10-15, playful sticker UI,
@@ -39,7 +39,7 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
 
-  /* Yukti Material-3 surface tokens (work in both themes) */
+  /* Karya Sanga Material-3 surface tokens (work in both themes) */
   --color-surface: var(--surface);
   --color-surface-dim: var(--surface-dim);
   --color-surface-bright: var(--surface-bright);
@@ -128,7 +128,7 @@
   --ring: #a73a00;
   --radius: 0.75rem;
 
-  /* Yukti Material-3 surface */
+  /* Karya Sanga Material-3 surface */
   --surface: #faf8ff;
   --surface-dim: #d2d9f4;
   --surface-bright: #faf8ff;
@@ -142,7 +142,7 @@
   --outline: #8f7065;
   --outline-variant: #e4beb1;
 
-  /* Yukti — primary terracotta */
+  /* Karya Sanga — primary terracotta */
   --on-primary: #ffffff;
   --primary-container: #ff5c00;
   --on-primary-container: #521800;
@@ -152,7 +152,7 @@
   --on-primary-fixed-variant: #802a00;
   --inverse-primary: #ffb59a;
 
-  /* Yukti — secondary teal */
+  /* Karya Sanga — secondary teal */
   --secondary-container: #57fae9;
   --on-secondary-container: #007168;
   --secondary-fixed: #57fae9;
@@ -160,7 +160,7 @@
   --on-secondary-fixed: #00201d;
   --on-secondary-fixed-variant: #005049;
 
-  /* Yukti — tertiary purple */
+  /* Karya Sanga — tertiary purple */
   --tertiary: #842bd2;
   --tertiary-container: #b86fff;
   --on-tertiary: #ffffff;

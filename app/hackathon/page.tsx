@@ -13,7 +13,7 @@ import { Mascot } from "@/components/ui/mascot";
 import { SpeechBubble } from "@/components/ui/speech-bubble";
 import { MessageButton } from "@/components/ui/message-button";
 
-export const metadata = { title: "Hackathon · Yukti AI Labs" };
+export const metadata = { title: "Hackathon · Karya Sanga" };
 
 /**
  * Hackathon home (locked 2026-06-27).

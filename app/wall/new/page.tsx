@@ -3,7 +3,7 @@ import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { UploadPostForm } from "@/components/wall/upload-post-form";
 
-export const metadata = { title: "New post · Yukti AI Labs" };
+export const metadata = { title: "New post · Karya Sanga" };
 
 export default async function NewWallPostPage() {
   const user = await requireUser();

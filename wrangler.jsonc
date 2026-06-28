@@ -1,5 +1,5 @@
 /**
- * Cloudflare Workers config for Yukti AI Labs.
+ * Cloudflare Workers config for Karya Sanga.
  *
  * Deployed via `@opennextjs/cloudflare` — Next.js 16 server output is built
  * into a single Worker that serves both static assets and dynamic routes.
@@ -17,7 +17,7 @@
  */
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "yukti-ai-labs",
+  "name": "karya-sanga",
   "main": ".open-next/worker.js",
   "compatibility_date": "2026-06-20",
   "compatibility_flags": [

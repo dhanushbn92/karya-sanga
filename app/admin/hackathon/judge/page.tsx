@@ -2,7 +2,7 @@ import Link from "next/link";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-export const metadata = { title: "Judging · Yukti AI Labs" };
+export const metadata = { title: "Judging · Karya Sanga" };
 
 export default async function JudgeIndexPage() {
   const me = await requireRole(["admin", "instructor", "judge"]);

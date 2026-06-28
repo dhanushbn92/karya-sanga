@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requestPasswordReset } from "@/lib/actions/auth";
 
-export const metadata = { title: "Reset password · Yukti AI Labs" };
+export const metadata = { title: "Reset password · Karya Sanga" };
 
 /**
  * Password reset request page. The form submits to `requestPasswordReset`
