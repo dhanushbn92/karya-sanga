@@ -10,7 +10,7 @@
     "postinstall": "prisma generate",
     "db:sync": "prisma generate && prisma db push --accept-data-loss",
     "db:baseline": "prisma migrate diff --from-empty --to-schema ./prisma/schema.prisma --script > prisma/SCHEMA_BASELINE.sql",
-    "cf:build": "prisma generate && prisma db push --accept-data-loss && opennextjs-cloudflare build",
+    "cf:build": "prisma generate && prisma db push --accept-data-loss && node scripts/prune-prisma-engines.mjs && opennextjs-cloudflare build",
     "cf:preview": "opennextjs-cloudflare preview",
     "cf:deploy": "opennextjs-cloudflare deploy",
     "cf:dryrun": "wrangler deploy --dry-run --outdir=.open-next/dryrun"
