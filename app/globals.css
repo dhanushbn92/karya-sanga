@@ -1,26 +1,527 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@custom-variant dark (&:is(.dark *));
+
+/* =====================================================================
+ * Yukti AI Labs design system
+ *
+ * Two tracks live side-by-side:
+ *  - LIGHT "Youth Edition" — primary; ages ~10-15, playful sticker UI,
+ *    bold weights, terracotta + teal + purple palette on lavender-white.
+ *    Source: yukti_ai_labs_home_youth_edition / yukti_ai_fun_learning_slides.
+ *  - DARK "Modern Ashram" — secondary; contemplative dark glassmorphism
+ *    for instructor / admin views. Source: yukti_ai_labs / DESIGN.md.
+ *
+ * Light is the :root default. Dark activates via `class="dark"` on a
+ * route segment (e.g. <html className="dark"> for /admin).
+ * ===================================================================== */
 
 @theme inline {
+  /* shadcn variable bridge */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Yukti Material-3 surface tokens (work in both themes) */
+  --color-surface: var(--surface);
+  --color-surface-dim: var(--surface-dim);
+  --color-surface-bright: var(--surface-bright);
+  --color-surface-container-lowest: var(--surface-container-lowest);
+  --color-surface-container-low: var(--surface-container-low);
+  --color-surface-container: var(--surface-container);
+  --color-surface-container-high: var(--surface-container-high);
+  --color-surface-container-highest: var(--surface-container-highest);
+  --color-on-surface: var(--on-surface);
+  --color-on-surface-variant: var(--on-surface-variant);
+  --color-outline: var(--outline);
+  --color-outline-variant: var(--outline-variant);
+  --color-on-primary: var(--on-primary);
+  --color-primary-container: var(--primary-container);
+  --color-on-primary-container: var(--on-primary-container);
+  --color-primary-fixed: var(--primary-fixed);
+  --color-primary-fixed-dim: var(--primary-fixed-dim);
+  --color-on-primary-fixed: var(--on-primary-fixed);
+  --color-on-primary-fixed-variant: var(--on-primary-fixed-variant);
+  --color-secondary-container: var(--secondary-container);
+  --color-on-secondary-container: var(--on-secondary-container);
+  --color-secondary-fixed: var(--secondary-fixed);
+  --color-secondary-fixed-dim: var(--secondary-fixed-dim);
+  --color-on-secondary-fixed: var(--on-secondary-fixed);
+  --color-on-secondary-fixed-variant: var(--on-secondary-fixed-variant);
+  --color-tertiary: var(--tertiary);
+  --color-tertiary-container: var(--tertiary-container);
+  --color-on-tertiary: var(--on-tertiary);
+  --color-on-tertiary-container: var(--on-tertiary-container);
+  --color-tertiary-fixed: var(--tertiary-fixed);
+  --color-tertiary-fixed-dim: var(--tertiary-fixed-dim);
+  --color-on-tertiary-fixed: var(--on-tertiary-fixed);
+  --color-on-tertiary-fixed-variant: var(--on-tertiary-fixed-variant);
+  --color-inverse-surface: var(--inverse-surface);
+  --color-inverse-on-surface: var(--inverse-on-surface);
+  --color-inverse-primary: var(--inverse-primary);
+
+  /* Typography */
   --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-mono: var(--font-jetbrains-mono);
+  --font-heading: var(--font-baloo);
+
+  /* Radii — bumped to match the soft, claymorphism-inspired direction */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.625rem;
+  --radius-lg: 0.875rem;
+  --radius-xl: 1.25rem;
+  --radius-2xl: 1.75rem;
+  --radius-3xl: 2.25rem;
+  --radius-4xl: 2.75rem;
+
+  /* Motion tokens — kept short + spring-y per Material/Apple guidelines */
+  --motion-fast: 150ms;
+  --motion-base: 220ms;
+  --motion-slow: 320ms;
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* =====================================================================
+ * LIGHT — "Youth Edition" (primary, default)
+ *
+ * Lavender-white surface, terracotta primary, teal secondary, purple
+ * tertiary. Deep navy text. Bold weights everywhere. Bright + friendly.
+ * Source palette: yukti_ai_labs_home_youth_edition.
+ * ===================================================================== */
+:root {
+  /* shadcn slots */
+  --background: #faf8ff;
+  --foreground: #131b2e;
+  --card: #ffffff;
+  --card-foreground: #131b2e;
+  --popover: #ffffff;
+  --popover-foreground: #131b2e;
+  --primary: #a73a00;
+  --primary-foreground: #ffffff;
+  --secondary: #006a62;
+  --secondary-foreground: #ffffff;
+  --muted: #f2f3ff;
+  --muted-foreground: #5b4137;
+  --accent: #eaedff;
+  --accent-foreground: #131b2e;
+  --destructive: #ba1a1a;
+  --border: #e4beb1;
+  --input: #e4beb1;
+  --ring: #a73a00;
+  --radius: 0.75rem;
+
+  /* Yukti Material-3 surface */
+  --surface: #faf8ff;
+  --surface-dim: #d2d9f4;
+  --surface-bright: #faf8ff;
+  --surface-container-lowest: #ffffff;
+  --surface-container-low: #f2f3ff;
+  --surface-container: #eaedff;
+  --surface-container-high: #e2e7ff;
+  --surface-container-highest: #dae2fd;
+  --on-surface: #131b2e;
+  --on-surface-variant: #5b4137;
+  --outline: #8f7065;
+  --outline-variant: #e4beb1;
+
+  /* Yukti — primary terracotta */
+  --on-primary: #ffffff;
+  --primary-container: #ff5c00;
+  --on-primary-container: #521800;
+  --primary-fixed: #ffdbce;
+  --primary-fixed-dim: #ffb59a;
+  --on-primary-fixed: #370e00;
+  --on-primary-fixed-variant: #802a00;
+  --inverse-primary: #ffb59a;
+
+  /* Yukti — secondary teal */
+  --secondary-container: #57fae9;
+  --on-secondary-container: #007168;
+  --secondary-fixed: #57fae9;
+  --secondary-fixed-dim: #2addcd;
+  --on-secondary-fixed: #00201d;
+  --on-secondary-fixed-variant: #005049;
+
+  /* Yukti — tertiary purple */
+  --tertiary: #842bd2;
+  --tertiary-container: #b86fff;
+  --on-tertiary: #ffffff;
+  --on-tertiary-container: #420074;
+  --tertiary-fixed: #f0dbff;
+  --tertiary-fixed-dim: #ddb7ff;
+  --on-tertiary-fixed: #2c0051;
+  --on-tertiary-fixed-variant: #6900b3;
+
+  /* Inverse — used for the dark hackathon callout on light pages */
+  --inverse-surface: #283044;
+  --inverse-on-surface: #eef0ff;
+}
+
+/* =====================================================================
+ * DARK — "Modern Ashram" (secondary, instructor/admin)
+ *
+ * Activated via class="dark" on an element. Saffron primary on deep
+ * obsidian, glassmorphic, contemplative. Source: yukti_ai_labs/DESIGN.md.
+ * ===================================================================== */
+.dark {
+  --background: #131313;
+  --foreground: #e5e2e1;
+  --card: #201f1f;
+  --card-foreground: #e5e2e1;
+  --popover: #201f1f;
+  --popover-foreground: #e5e2e1;
+  --primary: #ffb4a2;
+  --primary-foreground: #621100;
+  --secondary: #474746;
+  --secondary-foreground: #b7b5b4;
+  --muted: #1c1b1b;
+  --muted-foreground: #ae887f;
+  --accent: #2a2a2a;
+  --accent-foreground: #e5e2e1;
+  --destructive: #ffb4ab;
+  --border: rgba(255, 255, 255, 0.08);
+  --input: rgba(255, 255, 255, 0.10);
+  --ring: #ffb4a2;
+
+  --surface: #131313;
+  --surface-dim: #131313;
+  --surface-bright: #3a3939;
+  --surface-container-lowest: #0e0e0e;
+  --surface-container-low: #1c1b1b;
+  --surface-container: #201f1f;
+  --surface-container-high: #2a2a2a;
+  --surface-container-highest: #353534;
+  --on-surface: #e5e2e1;
+  --on-surface-variant: #e8bdb3;
+  --outline: #ae887f;
+  --outline-variant: #5e3f38;
+
+  --on-primary: #621100;
+  --primary-container: #ff562c;
+  --on-primary-container: #560e00;
+  --primary-fixed: #ffdad2;
+  --primary-fixed-dim: #ffb4a2;
+  --on-primary-fixed: #3c0700;
+  --on-primary-fixed-variant: #8a1d00;
+  --inverse-primary: #b42800;
+
+  --secondary-container: #474746;
+  --on-secondary-container: #b7b5b4;
+  --secondary-fixed: #e5e2e1;
+  --secondary-fixed-dim: #c8c6c5;
+  --on-secondary-fixed: #1c1b1b;
+  --on-secondary-fixed-variant: #474746;
+
+  --tertiary: #ddb7ff;
+  --tertiary-container: #b76dff;
+  --on-tertiary: #490080;
+  --on-tertiary-container: #400071;
+  --tertiary-fixed: #f0dbff;
+  --tertiary-fixed-dim: #ddb7ff;
+  --on-tertiary-fixed: #2c0051;
+  --on-tertiary-fixed-variant: #6900b3;
+
+  --inverse-surface: #e5e2e1;
+  --inverse-on-surface: #313030;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply font-sans antialiased;
+    scroll-behavior: smooth;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  body {
+    @apply bg-background text-foreground;
+    /* Subtle dot-grid texture — adds depth without being distracting */
+    background-image:
+      radial-gradient(
+        circle at 12px 12px,
+        rgba(167, 58, 0, 0.04) 1px,
+        transparent 1px
+      );
+    background-size: 24px 24px;
+    background-position: 0 0;
+  }
+  .dark body {
+    background-image: none;
+  }
+  /* Headings — Baloo 2, rounded + friendly */
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading), var(--font-sans), system-ui, sans-serif;
+    letter-spacing: -0.01em;
+  }
+  /* Selection in Youth Edition picks up the teal */
+  ::selection {
+    background-color: var(--secondary-container);
+    color: var(--on-secondary-container);
+  }
+  /* Polished focus ring (replaces the default outline). Saffron in light,
+   * lighter saffron in dark — visible against both surfaces. */
+  :focus-visible {
+    outline: none;
+    box-shadow:
+      0 0 0 2px var(--background),
+      0 0 0 4px var(--primary);
+    border-radius: var(--radius-md);
+  }
+  /* Honour reduced-motion across all the new spring/scale utilities */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* =====================================================================
+ * Youth Edition utilities — sticker shadows + playful interactions
+ * ===================================================================== */
+@layer utilities {
+  /* =====================================================================
+   * Sticker shadows — refined claymorphism-inspired multi-layer stacks.
+   * Combines a chunky color offset for personality with soft ambient/contact
+   * layers so the card feels real and tactile, not flat or printed.
+   * ===================================================================== */
+  .sticker-shadow {
+    box-shadow:
+      4px 4px 0px 0px rgba(167, 58, 0, 0.16),
+      0 2px 4px -1px rgba(19, 27, 46, 0.08),
+      0 12px 28px -8px rgba(167, 58, 0, 0.18);
+  }
+  .sticker-shadow-teal {
+    box-shadow:
+      4px 4px 0px 0px rgba(0, 113, 104, 0.16),
+      0 2px 4px -1px rgba(19, 27, 46, 0.08),
+      0 12px 28px -8px rgba(0, 113, 104, 0.18);
+  }
+  .sticker-shadow-purple {
+    box-shadow:
+      4px 4px 0px 0px rgba(132, 43, 210, 0.16),
+      0 2px 4px -1px rgba(19, 27, 46, 0.08),
+      0 12px 28px -8px rgba(132, 43, 210, 0.18);
+  }
+  /* Smaller variant — for compact chips, list rows, etc. */
+  .sticker-shadow-sm {
+    box-shadow:
+      2px 2px 0px 0px rgba(167, 58, 0, 0.14),
+      0 1px 2px 0 rgba(19, 27, 46, 0.06);
+  }
+
+  /* On hover, shadow collapses and the element shifts to meet it */
+  .sticker-hover {
+    transition: box-shadow var(--motion-base) var(--ease-out-soft),
+      transform var(--motion-base) var(--ease-out-soft);
+  }
+  .sticker-hover:hover {
+    box-shadow:
+      0 0 0 0 rgba(167, 58, 0, 0),
+      0 4px 8px -2px rgba(19, 27, 46, 0.06);
+    transform: translate(2px, 2px);
+  }
+
+  /* Universal soft card — softer than the sticker, used for content
+   * surfaces that don't need to feel like buttons. */
+  .soft-card {
+    background-color: var(--card);
+    border: 1px solid var(--outline-variant);
+    border-radius: var(--radius-3xl);
+    box-shadow:
+      0 1px 2px 0 rgba(19, 27, 46, 0.04),
+      0 12px 32px -16px rgba(19, 27, 46, 0.12);
+    transition: box-shadow var(--motion-base) var(--ease-out-soft),
+      transform var(--motion-base) var(--ease-out-soft),
+      border-color var(--motion-base) var(--ease-out-soft);
+  }
+  .soft-card:hover {
+    box-shadow:
+      0 2px 4px 0 rgba(19, 27, 46, 0.06),
+      0 24px 48px -24px rgba(19, 27, 46, 0.18);
+    border-color: var(--primary-fixed-dim);
+    transform: translateY(-2px);
+  }
+
+  /* Press feedback — spring-y scale-down on active. Pairs with any
+   * tappable surface (button, card-as-link, chip). */
+  .press-soft {
+    transition: transform var(--motion-fast) var(--ease-spring),
+      box-shadow var(--motion-fast) var(--ease-out-soft);
+  }
+  .press-soft:active {
+    transform: scale(0.97);
+  }
+  /* Lift on hover — micro-elevation that signals "this is interactive"
+   * without being noisy. */
+  .lift {
+    transition: transform var(--motion-base) var(--ease-out-soft),
+      box-shadow var(--motion-base) var(--ease-out-soft);
+  }
+  .lift:hover {
+    transform: translateY(-2px);
+  }
+
+  /* Hairline divider — 1px high, fades to transparent at the edges */
+  .hairline {
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      var(--outline-variant) 20%,
+      var(--outline-variant) 80%,
+      transparent
+    );
+  }
+
+  /* Brand gradients — for hero CTAs, badges, accents */
+  .gradient-saffron {
+    background-image: linear-gradient(135deg, #ff6b35 0%, #a73a00 100%);
+    color: #ffffff;
+  }
+  .gradient-teal {
+    background-image: linear-gradient(135deg, #57fae9 0%, #006a62 100%);
+    color: #ffffff;
+  }
+  .gradient-purple {
+    background-image: linear-gradient(135deg, #b86fff 0%, #842bd2 100%);
+    color: #ffffff;
+  }
+  .gradient-warm {
+    background-image: linear-gradient(135deg, #ffd60a 0%, #ff6b35 50%, #842bd2 100%);
+    color: #ffffff;
+  }
+
+  /* Skeleton — slow ambient shimmer for content while loading */
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      var(--surface-container-low) 0%,
+      var(--surface-container-high) 50%,
+      var(--surface-container-low) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.8s ease-in-out infinite;
+    border-radius: var(--radius-lg);
+  }
+  @keyframes shimmer {
+    0% {
+      background-position: 200% 0;
+    }
+    100% {
+      background-position: -200% 0;
+    }
+  }
+
+  /* Tilted stickers — playful chip rotation that doesn't push around layout */
+  .rotate-sticker {
+    transform: rotate(-2deg);
+    transition: transform var(--motion-base) var(--ease-spring);
+  }
+  .rotate-sticker:hover {
+    transform: rotate(1deg) scale(1.04);
+  }
+
+  /* 2px white border (looks like a halo around colored chips) */
+  .halo-border {
+    border: 2px solid #ffffff;
+  }
+
+  /* =====================================================================
+   * Modern Ashram utilities (preserved for .dark routes)
+   * ===================================================================== */
+  .glass-card {
+    background-color: rgba(32, 31, 31, 0.6);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+  }
+  .saffron-glow {
+    box-shadow: 0 0 40px -10px rgba(255, 180, 162, 0.35);
+  }
+  .saffron-glow-strong {
+    box-shadow: 0 0 60px -10px rgba(255, 86, 44, 0.45);
+  }
+  .light-trail {
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 180, 162, 0.7),
+      transparent
+    );
+    height: 1px;
+    width: 100%;
+  }
+
+  /* Shared label / display typography */
+  .mono-label {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 16px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .text-display-lg {
+    font-family: var(--font-heading), var(--font-sans), system-ui, sans-serif;
+    font-size: clamp(40px, 6vw, 56px);
+    line-height: 1.05;
+    letter-spacing: -0.025em;
+    font-weight: 800;
+  }
+  .text-display-md {
+    font-family: var(--font-heading), var(--font-sans), system-ui, sans-serif;
+    font-size: clamp(32px, 5vw, 40px);
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    font-weight: 700;
+  }
+  .text-headline-lg {
+    font-family: var(--font-heading), var(--font-sans), system-ui, sans-serif;
+    font-size: clamp(26px, 4vw, 32px);
+    line-height: 1.2;
+    letter-spacing: -0.015em;
+    font-weight: 700;
+  }
+  .text-headline-md {
+    font-family: var(--font-heading), var(--font-sans), system-ui, sans-serif;
+    font-size: clamp(20px, 2.4vw, 24px);
+    line-height: 1.3;
+    font-weight: 700;
+  }
+  .text-label-sm {
+    font-size: 12px;
+    line-height: 16px;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+  }
+}
+
+/* Material Symbols default */
+.material-symbols-outlined {
+  font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+  vertical-align: middle;
 }

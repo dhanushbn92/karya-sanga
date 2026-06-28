@@ -1,0 +1,47 @@
+/**
+ * Cloudflare Workers config for Yukti AI Labs.
+ *
+ * Deployed via `@opennextjs/cloudflare` — Next.js 16 server output is built
+ * into a single Worker that serves both static assets and dynamic routes.
+ *
+ * IMPORTANT compatibility flags:
+ *   - "nodejs_compat" — required by Prisma's @prisma/adapter-pg and by
+ *     several Next.js internals that import from `node:*` modules.
+ *   - "global_fetch_strictly_public" — disabled because Supabase server-side
+ *     calls need to reach private upstreams.
+ *
+ * Environment variables / secrets are set via `wrangler secret put NAME`
+ * (or via the Cloudflare dashboard) and are listed below for reference.
+ * They are NOT committed to this file — they live in Cloudflare's encrypted
+ * secret store.
+ */
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "yukti-ai-labs",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-06-20",
+  "compatibility_flags": [
+    "nodejs_compat",
+    "global_fetch_strictly_public"
+  ],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "observability": {
+    "enabled": true
+  },
+  /*
+   * Secrets — set with `wrangler secret put NAME`:
+   *   NEXT_PUBLIC_SUPABASE_URL
+   *   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+   *   SUPABASE_SECRET_KEY
+   *   DATABASE_URL
+   *   DIRECT_URL
+   *   NEXT_PUBLIC_SITE_URL
+   *
+   * For local development with `wrangler dev`, define these in
+   * `.dev.vars` (in this repo's root, git-ignored).
+   */
+  "placement": { "mode": "smart" }
+}
