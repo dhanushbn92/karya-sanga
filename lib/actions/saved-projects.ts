@@ -2,7 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { prisma } from "@/lib/prisma";
+import { and, eq } from "drizzle-orm";
+import { createId } from "@paralleldrive/cuid2";
+import { db, savedProject } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 
 const saveSchema = z.object({
@@ -27,13 +29,15 @@ export async function saveProject(formData: FormData): Promise<void> {
   if (!parsed.success) {
     throw new Error(parsed.error.issues[0]?.message ?? "Invalid input");
   }
-  await prisma.savedProject.create({
-    data: {
-      ownerId: user.id,
-      name: parsed.data.name,
-      wokwiProjectUrl: parsed.data.wokwiProjectUrl,
-      notes: parsed.data.notes || null,
-    },
+  await db.insert(savedProject).values({
+    // Prisma generated id (cuid) and set updatedAt client-side; the DB has no
+    // default for either, so we do it here.
+    id: createId(),
+    ownerId: user.id,
+    name: parsed.data.name,
+    wokwiProjectUrl: parsed.data.wokwiProjectUrl,
+    notes: parsed.data.notes || null,
+    updatedAt: new Date(),
   });
   revalidatePath("/simulator");
   revalidatePath("/dashboard");
@@ -45,9 +49,9 @@ export async function deleteSavedProject(formData: FormData): Promise<void> {
   if (!id) throw new Error("Missing id");
 
   // Scope delete to the owner to prevent cross-user deletion.
-  await prisma.savedProject.deleteMany({
-    where: { id, ownerId: user.id },
-  });
+  await db
+    .delete(savedProject)
+    .where(and(eq(savedProject.id, id), eq(savedProject.ownerId, user.id)));
   revalidatePath("/simulator");
   revalidatePath("/dashboard");
 }
