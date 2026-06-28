@@ -1,12 +1,11 @@
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import rehypeHighlight from "rehype-highlight";
-import "highlight.js/styles/github.css";
 
 /**
  * Renders lesson body markdown server-side.
  * - GitHub-flavored markdown (tables, task lists, strikethrough)
- * - Syntax-highlighted code blocks via rehype-highlight
+ * - Code blocks render as plain monospace text (syntax highlighting was
+ *   removed to keep the worker bundle small; can be re-added later).
  * - Styled with Tailwind via the prose-like wrapper below
  */
 export function LessonBody({ markdown }: { markdown: string }) {
@@ -22,7 +21,6 @@ export function LessonBody({ markdown }: { markdown: string }) {
     <div className="lesson-prose text-on-surface">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
-        rehypePlugins={[rehypeHighlight]}
         components={{
           h1: (props) => (
             <h1 className="mt-8 mb-4 text-3xl font-bold text-on-surface" {...props} />
