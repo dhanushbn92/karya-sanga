@@ -1,6 +1,11 @@
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider      = "prisma-client"
+  output        = "../generated/prisma"
+  // Use the size-optimized WASM query compiler instead of the default "fast"
+  // build. Halves the compiler payload (~4.8 MB -> ~2.4 MB) so the worker
+  // fits Cloudflare's size limit; the runtime cost is a marginally slower
+  // query-compile step, negligible for this app's query volume.
+  compilerBuild = "small"
 }
 
 datasource db {
