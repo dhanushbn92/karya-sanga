@@ -11,6 +11,7 @@ import {
   type CommentVM,
 } from "@/components/wall/comment-section";
 import { WallRealtime } from "@/components/wall/wall-realtime";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export const metadata = { title: "Show & Tell · Karya Sanga" };
 
@@ -676,15 +677,14 @@ function WallCard({
         {canDelete && (
           <form action={deleteWallPost} className="mt-3">
             <input type="hidden" name="id" value={post.id} />
-            <button
-              type="submit"
+            <SubmitButton
               className="inline-flex items-center gap-1 text-[11px] font-bold text-on-surface-variant transition-colors hover:text-destructive"
             >
               <span className="material-symbols-outlined text-[12px]">
                 delete
               </span>
               Remove
-            </button>
+            </SubmitButton>
           </form>
         )}
       </div>

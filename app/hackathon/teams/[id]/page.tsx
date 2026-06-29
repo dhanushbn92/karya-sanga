@@ -12,6 +12,7 @@ import {
   updateTeamWorkspace,
 } from "@/lib/actions/hackathon";
 import { getHackathonConfig } from "@/lib/hackathon-config";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export const metadata = { title: "Team workspace · Karya Sanga" };
 
@@ -103,15 +104,14 @@ export default async function TeamWorkspacePage({
         </div>
         {canEdit && (
           <form action={leaveTeam}>
-            <button
-              type="submit"
+            <SubmitButton
               className="inline-flex items-center gap-2 rounded-full border-2 border-outline-variant bg-card px-4 py-2 text-sm font-bold text-on-surface-variant transition-colors hover:border-destructive hover:text-destructive"
             >
               <span className="material-symbols-outlined text-[16px]">
                 logout
               </span>
               Leave team
-            </button>
+            </SubmitButton>
           </form>
         )}
       </header>
@@ -271,15 +271,14 @@ export default async function TeamWorkspacePage({
                   </label>
                 )}
                 <div className="md:col-span-12">
-                  <button
-                    type="submit"
+                  <SubmitButton
                     className="sticker-shadow inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2 font-bold text-on-primary transition-transform active:scale-95"
                   >
                     <span className="material-symbols-outlined text-[18px]">
                       save
                     </span>
                     Save workspace
-                  </button>
+                  </SubmitButton>
                 </div>
               </form>
             ) : (
@@ -342,15 +341,14 @@ export default async function TeamWorkspacePage({
                             name="teamId"
                             value={team.id}
                           />
-                          <button
-                            type="submit"
+                          <SubmitButton
                             aria-label="Remove link"
                             className="inline-flex h-8 w-8 items-center justify-center rounded-full border-2 border-outline-variant text-on-surface-variant transition-colors hover:border-destructive hover:text-destructive"
                           >
                             <span className="material-symbols-outlined text-[16px]">
                               close
                             </span>
-                          </button>
+                          </SubmitButton>
                         </form>
                       )}
                     </div>
@@ -392,15 +390,14 @@ export default async function TeamWorkspacePage({
                   />
                 </label>
                 <div className="flex items-end md:col-span-2">
-                  <button
-                    type="submit"
+                  <SubmitButton
                     className="sticker-shadow inline-flex w-full items-center justify-center gap-1 rounded-full bg-primary px-4 py-2 font-bold text-on-primary transition-transform active:scale-95"
                   >
                     Add
                     <span className="material-symbols-outlined text-[14px]">
                       add
                     </span>
-                  </button>
+                  </SubmitButton>
                 </div>
               </form>
             )}
@@ -481,12 +478,11 @@ export default async function TeamWorkspacePage({
                   {canDelete && (
                     <form action={deleteTeamMessage} className="mt-2">
                       <input type="hidden" name="id" value={msg.id} />
-                      <button
-                        type="submit"
+                      <SubmitButton
                         className="text-[10px] font-bold text-on-surface-variant hover:text-destructive"
                       >
                         Delete
-                      </button>
+                      </SubmitButton>
                     </form>
                   )}
                 </li>
@@ -514,15 +510,14 @@ export default async function TeamWorkspacePage({
                 className="w-full rounded-xl border-2 border-outline-variant bg-surface-container-lowest px-3 py-2 text-on-surface placeholder:text-on-surface-variant/50 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/15"
               />
             </label>
-            <button
-              type="submit"
+            <SubmitButton
               className="sticker-shadow inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2 font-bold text-on-primary transition-transform active:scale-95"
             >
               <span className="material-symbols-outlined text-[18px]">
                 send
               </span>
               Send
-            </button>
+            </SubmitButton>
           </form>
         )}
       </section>

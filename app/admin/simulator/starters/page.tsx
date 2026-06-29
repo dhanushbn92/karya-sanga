@@ -8,6 +8,7 @@ import {
   updateStarter,
 } from "@/lib/actions/starters";
 import { STARTER_BOARDS } from "@/lib/starter-boards";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export const metadata = { title: "Starters · Admin" };
 
@@ -152,15 +153,14 @@ export default async function StartersAdminPage() {
             </span>
           </label>
           <div className="md:col-span-9 flex items-end justify-end">
-            <button
-              type="submit"
+            <SubmitButton
               className="saffron-glow inline-flex items-center gap-2 rounded-xl bg-primary px-6 py-3 font-medium text-on-primary transition-colors hover:bg-primary-container hover:text-on-primary-container"
             >
               <span className="material-symbols-outlined text-[18px]">
                 add
               </span>
               Add starter
-            </button>
+            </SubmitButton>
           </div>
         </form>
       </section>
@@ -318,26 +318,24 @@ export default async function StartersAdminPage() {
                       </span>
                     </label>
                     <div className="md:col-span-9 flex items-center justify-end gap-2">
-                      <button
-                        type="submit"
+                      <SubmitButton
                         className="mono-label inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1 text-on-primary hover:brightness-110"
                       >
                         Save
-                      </button>
+                      </SubmitButton>
                     </div>
                   </form>
 
                   <form action={deleteStarter} className="mt-3 border-t border-white/5 pt-3">
                     <input type="hidden" name="id" value={s.id} />
-                    <button
-                      type="submit"
+                    <SubmitButton
                       className="mono-label inline-flex items-center gap-1 rounded-full border border-white/20 px-3 py-1 text-on-surface-variant hover:border-destructive hover:text-destructive"
                     >
                       <span className="material-symbols-outlined text-[12px]">
                         delete
                       </span>
                       Delete starter
-                    </button>
+                    </SubmitButton>
                   </form>
                 </details>
               </li>

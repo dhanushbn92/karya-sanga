@@ -9,6 +9,7 @@ import {
   rejectWallPost,
   updateWallConfig,
 } from "@/lib/actions/wall";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export const metadata = { title: "Wall moderation · Admin" };
 
@@ -103,12 +104,11 @@ export default async function WallAdminPage() {
               Require instructor approval before posts go live
             </span>
           </label>
-          <button
-            type="submit"
+          <SubmitButton
             className="mono-label inline-flex items-center gap-1 rounded-full border border-primary/40 px-3 py-1 text-primary hover:bg-primary/10"
           >
             Save
-          </button>
+          </SubmitButton>
         </form>
       </section>
 
@@ -175,15 +175,14 @@ export default async function WallAdminPage() {
                     <div className="flex flex-wrap items-center gap-2 pt-1">
                       <form action={approveWallPost}>
                         <input type="hidden" name="id" value={p.id} />
-                        <button
-                          type="submit"
+                        <SubmitButton
                           className="mono-label inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1 text-on-primary hover:brightness-110"
                         >
                           <span className="material-symbols-outlined text-[12px]">
                             check
                           </span>
                           Approve
-                        </button>
+                        </SubmitButton>
                       </form>
                       <details className="relative">
                         <summary className="mono-label inline-flex cursor-pointer list-none items-center gap-1 rounded-full border border-white/20 px-3 py-1 text-on-surface-variant hover:border-destructive hover:text-destructive">
@@ -203,25 +202,23 @@ export default async function WallAdminPage() {
                             maxLength={280}
                             className="w-full rounded-lg border border-white/10 bg-surface-container-low px-3 py-1.5 text-sm text-on-surface focus:border-primary focus:outline-none"
                           />
-                          <button
-                            type="submit"
+                          <SubmitButton
                             className="mono-label w-full rounded-full bg-destructive/10 px-3 py-1.5 text-destructive hover:bg-destructive/20"
                           >
                             Reject post
-                          </button>
+                          </SubmitButton>
                         </form>
                       </details>
                       <form action={deleteWallPost}>
                         <input type="hidden" name="id" value={p.id} />
-                        <button
-                          type="submit"
+                        <SubmitButton
                           className="mono-label inline-flex items-center gap-1 rounded-full border border-white/20 px-3 py-1 text-on-surface-variant hover:border-destructive hover:text-destructive"
                         >
                           <span className="material-symbols-outlined text-[12px]">
                             delete
                           </span>
                           Delete
-                        </button>
+                        </SubmitButton>
                       </form>
                     </div>
                   </div>

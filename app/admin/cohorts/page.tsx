@@ -3,6 +3,7 @@ import { desc, eq, sql } from "drizzle-orm";
 import { requireRole } from "@/lib/auth";
 import { db, cohort, user as userTable, team, cohortPost } from "@/lib/db";
 import { createCohort } from "@/lib/actions/alumni";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export const metadata = { title: "Workshops · Admin" };
 
@@ -112,15 +113,14 @@ export default async function CohortsAdminPage() {
             />
           </label>
           <div className="md:col-span-12">
-            <button
-              type="submit"
+            <SubmitButton
               className="saffron-glow inline-flex items-center gap-2 rounded-xl bg-primary px-6 py-3 font-medium text-on-primary"
             >
               <span className="material-symbols-outlined text-[18px]">
                 add
               </span>
               Create workshop
-            </button>
+            </SubmitButton>
           </div>
         </form>
       </section>

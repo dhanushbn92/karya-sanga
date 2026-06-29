@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/auth";
 import { db, team as teamTable } from "@/lib/db";
 import { submitProject } from "@/lib/actions/submissions";
 import { getHackathonConfig } from "@/lib/hackathon-config";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export const metadata = { title: "Submit · Karya Sanga" };
 
@@ -189,15 +190,14 @@ export default async function SubmitPage({
         </label>
 
         <div className="md:col-span-12 flex flex-wrap items-center gap-3 pt-2">
-          <button
-            type="submit"
+          <SubmitButton
             className="sticker-shadow inline-flex items-center gap-2 rounded-full bg-primary-container px-6 py-3 font-bold text-on-primary-container transition-transform active:scale-95"
           >
             <span className="material-symbols-outlined text-[18px]">
               {submission ? "save" : "rocket_launch"}
             </span>
             {submission ? "Save edits" : "Submit project"}
-          </button>
+          </SubmitButton>
           <Link
             href={`/hackathon/teams/${team.id}`}
             className="inline-flex items-center gap-2 rounded-full border-2 border-outline-variant px-5 py-3 font-bold text-on-surface-variant transition-colors hover:border-primary hover:text-primary"

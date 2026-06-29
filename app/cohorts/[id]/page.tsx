@@ -19,6 +19,7 @@ import {
   pinCohortPost,
 } from "@/lib/actions/alumni";
 import { getHackathonConfig } from "@/lib/hackathon-config";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export const metadata = { title: "Workshop · Karya Sanga" };
 
@@ -471,15 +472,14 @@ export default async function WorkshopPage({
             {!isMember && (
               <form action={joinWorkshop}>
                 <input type="hidden" name="cohortId" value={cohort.id} />
-                <button
-                  type="submit"
+                <SubmitButton
                   className="sticker-shadow inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2 font-bold text-on-primary transition-transform active:scale-95"
                 >
                   <span className="material-symbols-outlined text-[16px]">
                     group_add
                   </span>
                   Join workshop
-                </button>
+                </SubmitButton>
               </form>
             )}
             {/* Leave — secondary members only (primary membership is
@@ -487,15 +487,14 @@ export default async function WorkshopPage({
             {isSecondaryMember && !isPrimaryMember && (
               <form action={leaveWorkshop}>
                 <input type="hidden" name="cohortId" value={cohort.id} />
-                <button
-                  type="submit"
+                <SubmitButton
                   className="inline-flex items-center gap-2 rounded-full border-2 border-outline-variant bg-card px-4 py-2 text-sm font-bold text-on-surface-variant hover:border-destructive hover:text-destructive"
                 >
                   <span className="material-symbols-outlined text-[16px]">
                     logout
                   </span>
                   Leave workshop
-                </button>
+                </SubmitButton>
               </form>
             )}
             {isMod && (
@@ -824,15 +823,14 @@ export default async function WorkshopPage({
                   />
                 </label>
                 <div className="mt-2 flex justify-end">
-                  <button
-                    type="submit"
+                  <SubmitButton
                     className="sticker-shadow inline-flex items-center gap-2 rounded-full bg-primary px-4 py-1.5 text-sm font-bold text-on-primary"
                   >
                     <span className="material-symbols-outlined text-[14px]">
                       send
                     </span>
                     Post
-                  </button>
+                  </SubmitButton>
                 </div>
               </form>
             )}
@@ -896,23 +894,21 @@ export default async function WorkshopPage({
                                 defaultChecked={!p.pinned}
                                 className="hidden"
                               />
-                              <button
-                                type="submit"
+                              <SubmitButton
                                 className="font-bold text-on-surface-variant hover:text-primary"
                               >
                                 {p.pinned ? "Unpin" : "Pin"}
-                              </button>
+                              </SubmitButton>
                             </form>
                           )}
                           {canDelete && (
                             <form action={deleteCohortPost}>
                               <input type="hidden" name="id" value={p.id} />
-                              <button
-                                type="submit"
+                              <SubmitButton
                                 className="font-bold text-on-surface-variant hover:text-destructive"
                               >
                                 Delete
-                              </button>
+                              </SubmitButton>
                             </form>
                           )}
                         </div>

@@ -14,6 +14,7 @@ import {
   unlockSubmission,
   updateHackathonConfig,
 } from "@/lib/actions/submissions";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export const metadata = { title: "Hackathon · Admin" };
 
@@ -177,15 +178,14 @@ export default async function HackathonAdminPage() {
             </span>
           </label>
           <div className="md:col-span-12">
-            <button
-              type="submit"
+            <SubmitButton
               className="saffron-glow inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2 font-medium text-on-primary transition-colors hover:bg-primary-container hover:text-on-primary-container"
             >
               <span className="material-symbols-outlined text-[18px]">
                 save
               </span>
               Save settings
-            </button>
+            </SubmitButton>
           </div>
         </form>
       </section>
@@ -358,12 +358,11 @@ export default async function HackathonAdminPage() {
                               name="submissionId"
                               value={s.id}
                             />
-                            <button
-                              type="submit"
+                            <SubmitButton
                               className="mono-label inline-flex items-center gap-1 rounded-full border border-white/20 px-3 py-1 text-on-surface-variant hover:border-primary/40 hover:text-primary"
                             >
                               Unlock
-                            </button>
+                            </SubmitButton>
                           </form>
                         ) : (
                           <form action={lockSubmission}>
@@ -372,12 +371,11 @@ export default async function HackathonAdminPage() {
                               name="submissionId"
                               value={s.id}
                             />
-                            <button
-                              type="submit"
+                            <SubmitButton
                               className="mono-label inline-flex items-center gap-1 rounded-full border border-white/20 px-3 py-1 text-on-surface-variant hover:border-primary/40 hover:text-primary"
                             >
                               Lock
-                            </button>
+                            </SubmitButton>
                           </form>
                         )}
                       </div>

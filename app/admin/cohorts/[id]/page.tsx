@@ -31,6 +31,7 @@ import {
   detachModuleFromCohort,
   moveAttachedModule,
 } from "@/lib/actions/admin-lessons";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export const metadata = { title: "Edit workshop · Admin" };
 
@@ -312,15 +313,14 @@ export default async function CohortEditPage({
             />
           </label>
           <div className="md:col-span-12">
-            <button
-              type="submit"
+            <SubmitButton
               className="saffron-glow inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2 font-medium text-on-primary"
             >
               <span className="material-symbols-outlined text-[18px]">
                 save
               </span>
               Save
-            </button>
+            </SubmitButton>
           </div>
         </form>
 
@@ -329,15 +329,14 @@ export default async function CohortEditPage({
           className="mt-6 border-t border-white/10 pt-4"
         >
           <input type="hidden" name="id" value={cohort.id} />
-          <button
-            type="submit"
+          <SubmitButton
             className="mono-label inline-flex items-center gap-1 rounded-full border border-destructive/40 px-3 py-1 text-destructive hover:bg-destructive/10"
           >
             <span className="material-symbols-outlined text-[12px]">
               delete
             </span>
             Delete workshop (members are removed)
-          </button>
+          </SubmitButton>
         </form>
       </section>
 
@@ -373,15 +372,14 @@ export default async function CohortEditPage({
                 <form action={adminAssignUserToCohort}>
                   <input type="hidden" name="userId" value={m.id} />
                   <input type="hidden" name="cohortId" value="" />
-                  <button
-                    type="submit"
+                  <SubmitButton
                     className="mono-label inline-flex items-center gap-1 rounded-full border border-white/20 px-3 py-1 text-on-surface-variant hover:border-destructive hover:text-destructive"
                   >
                     <span className="material-symbols-outlined text-[12px]">
                       remove
                     </span>
                     Remove
-                  </button>
+                  </SubmitButton>
                 </form>
               </li>
             ))}
@@ -418,15 +416,14 @@ export default async function CohortEditPage({
                   ))}
                 </select>
               </label>
-              <button
-                type="submit"
+              <SubmitButton
                 className="mono-label inline-flex items-center gap-1 rounded-full bg-primary px-3 py-2 text-on-primary hover:brightness-110"
               >
                 <span className="material-symbols-outlined text-[14px]">
                   add
                 </span>
                 Assign
-              </button>
+              </SubmitButton>
             </form>
           </div>
         )}
@@ -563,15 +560,14 @@ export default async function CohortEditPage({
             . Up to 200 people per batch.
           </p>
           <div>
-            <button
-              type="submit"
+            <SubmitButton
               className="saffron-glow inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2 font-medium text-on-primary"
             >
               <span className="material-symbols-outlined text-[18px]">
                 group_add
               </span>
               Add to workshop
-            </button>
+            </SubmitButton>
           </div>
         </form>
       </section>
@@ -625,15 +621,14 @@ export default async function CohortEditPage({
                       name="cohortId"
                       value={cohort.id}
                     />
-                    <button
-                      type="submit"
+                    <SubmitButton
                       className="mono-label inline-flex items-center gap-1 rounded-full border border-white/20 px-3 py-1 text-on-surface-variant hover:border-destructive hover:text-destructive"
                     >
                       <span className="material-symbols-outlined text-[12px]">
                         remove
                       </span>
                       Remove
-                    </button>
+                    </SubmitButton>
                   </form>
                 </li>
               );
@@ -677,15 +672,14 @@ export default async function CohortEditPage({
                   ))}
                 </select>
               </label>
-              <button
-                type="submit"
+              <SubmitButton
                 className="mono-label inline-flex items-center gap-1 rounded-full bg-primary px-3 py-2 text-on-primary hover:brightness-110"
               >
                 <span className="material-symbols-outlined text-[14px]">
                   add
                 </span>
                 Add to workshop
-              </button>
+              </SubmitButton>
             </form>
           </div>
         )}
@@ -761,8 +755,7 @@ export default async function CohortEditPage({
                       <input type="hidden" name="cohortId" value={cohort.id} />
                       <input type="hidden" name="moduleId" value={m.id} />
                       <input type="hidden" name="direction" value="up" />
-                      <button
-                        type="submit"
+                      <SubmitButton
                         disabled={isFirst}
                         className="mono-label inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/20 text-on-surface-variant transition-colors hover:border-primary/40 hover:text-primary disabled:opacity-30 disabled:hover:border-white/20 disabled:hover:text-on-surface-variant"
                         title="Move up"
@@ -770,15 +763,14 @@ export default async function CohortEditPage({
                         <span className="material-symbols-outlined text-[16px]">
                           arrow_upward
                         </span>
-                      </button>
+                      </SubmitButton>
                     </form>
                     {/* Down */}
                     <form action={moveAttachedModule}>
                       <input type="hidden" name="cohortId" value={cohort.id} />
                       <input type="hidden" name="moduleId" value={m.id} />
                       <input type="hidden" name="direction" value="down" />
-                      <button
-                        type="submit"
+                      <SubmitButton
                         disabled={isLast}
                         className="mono-label inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/20 text-on-surface-variant transition-colors hover:border-primary/40 hover:text-primary disabled:opacity-30 disabled:hover:border-white/20 disabled:hover:text-on-surface-variant"
                         title="Move down"
@@ -786,21 +778,20 @@ export default async function CohortEditPage({
                         <span className="material-symbols-outlined text-[16px]">
                           arrow_downward
                         </span>
-                      </button>
+                      </SubmitButton>
                     </form>
                     {/* Remove */}
                     <form action={detachModuleFromCohort}>
                       <input type="hidden" name="cohortId" value={cohort.id} />
                       <input type="hidden" name="moduleId" value={m.id} />
-                      <button
-                        type="submit"
+                      <SubmitButton
                         className="mono-label inline-flex items-center gap-1 rounded-full border border-white/20 px-3 py-1 text-on-surface-variant hover:border-destructive hover:text-destructive"
                       >
                         <span className="material-symbols-outlined text-[12px]">
                           remove
                         </span>
                         Remove
-                      </button>
+                      </SubmitButton>
                     </form>
                   </li>
                 );
@@ -852,15 +843,14 @@ export default async function CohortEditPage({
                   <form action={attachModuleToCohort}>
                     <input type="hidden" name="cohortId" value={cohort.id} />
                     <input type="hidden" name="moduleId" value={m.id} />
-                    <button
-                      type="submit"
+                    <SubmitButton
                       className="mono-label inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1 text-on-primary hover:brightness-110"
                     >
                       <span className="material-symbols-outlined text-[12px]">
                         add
                       </span>
                       Add
-                    </button>
+                    </SubmitButton>
                   </form>
                 </li>
               ))}
@@ -925,15 +915,14 @@ export default async function CohortEditPage({
                       name="cohortId"
                       value={cohort.id}
                     />
-                    <button
-                      type="submit"
+                    <SubmitButton
                       className="mono-label inline-flex items-center gap-1 rounded-full border border-white/20 px-2.5 py-1 text-on-surface-variant hover:border-destructive hover:text-destructive"
                     >
                       <span className="material-symbols-outlined text-[12px]">
                         delete
                       </span>
                       Delete
-                    </button>
+                    </SubmitButton>
                   </form>
                 </li>
               ))}
@@ -1017,15 +1006,14 @@ export default async function CohortEditPage({
             />
           </label>
           <div className="md:col-span-12">
-            <button
-              type="submit"
+            <SubmitButton
               className="saffron-glow inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2 font-medium text-on-primary"
             >
               <span className="material-symbols-outlined text-[18px]">
                 add
               </span>
               Create badge
-            </button>
+            </SubmitButton>
           </div>
         </form>
       </section>
@@ -1120,15 +1108,14 @@ export default async function CohortEditPage({
             </span>
           </label>
           <div className="md:col-span-12 flex flex-wrap items-center gap-3 pt-1">
-            <button
-              type="submit"
+            <SubmitButton
               className="saffron-glow inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2 font-medium text-on-primary"
             >
               <span className="material-symbols-outlined text-[18px]">
                 save
               </span>
               {workshopHackathonConfig ? "Update" : "Use override"}
-            </button>
+            </SubmitButton>
             <span className="text-[11px] text-on-surface-variant">
               {workshopHackathonConfig
                 ? "Currently using a workshop-specific config."
@@ -1142,15 +1129,14 @@ export default async function CohortEditPage({
             className="mt-3"
           >
             <input type="hidden" name="cohortId" value={cohort.id} />
-            <button
-              type="submit"
+            <SubmitButton
               className="mono-label inline-flex items-center gap-1 rounded-full border border-destructive/40 px-3 py-1 text-destructive hover:bg-destructive/10"
             >
               <span className="material-symbols-outlined text-[12px]">
                 restart_alt
               </span>
               Revert to default
-            </button>
+            </SubmitButton>
           </form>
         )}
       </section>
@@ -1207,12 +1193,11 @@ export default async function CohortEditPage({
                   ))}
               </select>
             </label>
-            <button
-              type="submit"
+            <SubmitButton
               className="mono-label inline-flex items-center gap-1 rounded-full border border-white/20 px-3 py-2 text-on-surface-variant hover:border-primary/40 hover:text-primary"
             >
               Move
-            </button>
+            </SubmitButton>
           </form>
         </section>
       )}

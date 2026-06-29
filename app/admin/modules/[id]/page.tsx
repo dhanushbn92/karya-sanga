@@ -9,6 +9,7 @@ import {
   updateModule,
 } from "@/lib/actions/admin-lessons";
 import { UploadSlideFile } from "@/components/lessons/upload-slide-file";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export const metadata = { title: "Edit module · Admin" };
 
@@ -96,29 +97,27 @@ export default async function ModuleEditPage({
             />
           </label>
           <div className="md:col-span-12 flex items-center justify-between gap-4">
-            <button
-              type="submit"
+            <SubmitButton
               className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2 font-medium text-on-primary transition-colors hover:bg-primary-container hover:text-on-primary-container"
             >
               <span className="material-symbols-outlined text-[18px]">
                 save
               </span>
               Save changes
-            </button>
+            </SubmitButton>
           </div>
         </form>
 
         <form action={deleteModule} className="mt-6 border-t border-white/10 pt-4">
           <input type="hidden" name="id" value={mod.id} />
-          <button
-            type="submit"
+          <SubmitButton
             className="mono-label inline-flex items-center gap-2 rounded-full border border-destructive/40 px-4 py-1.5 text-destructive transition-colors hover:bg-destructive/10"
           >
             <span className="material-symbols-outlined text-[14px]">
               delete
             </span>
             Delete module + all lessons
-          </button>
+          </SubmitButton>
         </form>
       </section>
 
@@ -338,15 +337,14 @@ export default async function ModuleEditPage({
               </span>
             </label>
             <div className="md:col-span-12">
-              <button
-                type="submit"
+              <SubmitButton
                 className="saffron-glow inline-flex items-center gap-2 rounded-xl bg-primary px-6 py-3 font-medium text-on-primary transition-colors hover:bg-primary-container hover:text-on-primary-container"
               >
                 <span className="material-symbols-outlined text-[18px]">
                   add
                 </span>
                 Add lesson
-              </button>
+              </SubmitButton>
             </div>
           </form>
         </div>

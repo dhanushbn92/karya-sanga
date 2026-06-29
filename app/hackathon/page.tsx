@@ -19,6 +19,7 @@ import {
 import { Mascot } from "@/components/ui/mascot";
 import { SpeechBubble } from "@/components/ui/speech-bubble";
 import { MessageButton } from "@/components/ui/message-button";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export const metadata = { title: "Hackathon · Karya Sanga" };
 
@@ -500,13 +501,12 @@ export default async function HackathonPage() {
               />
             </label>
             <div className="md:col-span-2 flex items-end">
-              <button
-                type="submit"
+              <SubmitButton
                 className="press-soft inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-3 font-black uppercase tracking-wide text-on-primary"
                 style={{ boxShadow: "0 5px 0 0 #531800" }}
               >
                 Create
-              </button>
+              </SubmitButton>
             </div>
           </form>
         </section>
@@ -619,8 +619,7 @@ export default async function HackathonPage() {
                       ) : !onTeam && t.lookingForMembers && slotsLeft > 0 ? (
                         <form action={joinTeam}>
                           <input type="hidden" name="teamId" value={t.id} />
-                          <button
-                            type="submit"
+                          <SubmitButton
                             className="press-soft inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1.5 text-xs font-black uppercase tracking-wider text-on-primary"
                             style={{ boxShadow: "0 3px 0 0 #531800" }}
                           >
@@ -628,7 +627,7 @@ export default async function HackathonPage() {
                             <span className="material-symbols-outlined text-[14px]">
                               add
                             </span>
-                          </button>
+                          </SubmitButton>
                         </form>
                       ) : (
                         <span className="text-[10px] font-bold text-on-surface-variant">
@@ -861,8 +860,7 @@ export default async function HackathonPage() {
               />
             </label>
             <div className="md:col-span-12 flex flex-wrap items-center gap-3 pt-1">
-              <button
-                type="submit"
+              <SubmitButton
                 className="press-soft inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 font-black uppercase tracking-wide text-on-primary"
                 style={{ boxShadow: "0 4px 0 0 #531800" }}
               >
@@ -870,18 +868,17 @@ export default async function HackathonPage() {
                   {myLookingPost ? "save" : "campaign"}
                 </span>
                 {myLookingPost ? "Update post" : "Post"}
-              </button>
+              </SubmitButton>
               {myLookingPost && (
                 <form action={removeLookingForTeam}>
-                  <button
-                    type="submit"
+                  <SubmitButton
                     className="press-soft inline-flex items-center gap-2 rounded-full border-2 border-outline-variant bg-card px-4 py-2 text-sm font-bold text-on-surface-variant hover:border-destructive hover:text-destructive"
                   >
                     <span className="material-symbols-outlined text-[16px]">
                       delete
                     </span>
                     Remove
-                  </button>
+                  </SubmitButton>
                 </form>
               )}
             </div>

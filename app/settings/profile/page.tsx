@@ -4,6 +4,7 @@ import { requireUser } from "@/lib/auth";
 import { db, user } from "@/lib/db";
 import { updateMyProfile } from "@/lib/actions/alumni";
 import { ChangePasswordForm } from "@/components/auth/change-password-form";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export const metadata = { title: "Edit profile · Karya Sanga" };
 
@@ -163,13 +164,12 @@ export default async function ProfileSettingsPage() {
         </label>
 
         <div className="md:col-span-12">
-          <button
-            type="submit"
+          <SubmitButton
             className="sticker-shadow inline-flex items-center gap-2 rounded-full bg-primary px-6 py-3 font-bold text-on-primary transition-transform active:scale-95"
           >
             <span className="material-symbols-outlined text-[18px]">save</span>
             Save profile
-          </button>
+          </SubmitButton>
         </div>
       </form>
 

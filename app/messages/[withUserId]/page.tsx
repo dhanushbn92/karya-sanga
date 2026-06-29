@@ -7,6 +7,7 @@ import {
   markConversationRead,
   sendDirectMessage,
 } from "@/lib/actions/messages";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export const metadata = { title: "Message · Karya Sanga" };
 
@@ -216,8 +217,7 @@ export default async function ConversationPage({
           <span className="text-[10px] font-bold text-on-surface-variant">
             Press send — they&apos;ll see it next time they open their inbox.
           </span>
-          <button
-            type="submit"
+          <SubmitButton
             className="press-soft inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 font-black uppercase tracking-wide text-on-primary"
             style={{ boxShadow: "0 4px 0 0 #531800" }}
           >
@@ -225,7 +225,7 @@ export default async function ConversationPage({
               send
             </span>
             Send
-          </button>
+          </SubmitButton>
         </div>
       </form>
     </main>

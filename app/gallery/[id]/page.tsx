@@ -17,6 +17,7 @@ import {
   removeProjectMedia,
   toggleProjectReaction,
 } from "@/lib/actions/gallery";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export const metadata = { title: "Project · Karya Sanga" };
 
@@ -383,12 +384,11 @@ export default async function ProjectPage({
                           value={project.id}
                         />
                         <input type="hidden" name="url" value={url} />
-                        <button
-                          type="submit"
+                        <SubmitButton
                           className="text-[10px] font-bold text-on-surface-variant hover:text-destructive"
                         >
                           Remove
-                        </button>
+                        </SubmitButton>
                       </form>
                     )}
                   </div>
@@ -407,15 +407,14 @@ export default async function ProjectPage({
                     placeholder="Paste a YouTube, Vimeo, SoundCloud, or direct media URL"
                     className="flex-1 rounded-xl border-2 border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface placeholder:text-on-surface-variant/50 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/15"
                   />
-                  <button
-                    type="submit"
+                  <SubmitButton
                     className="sticker-shadow inline-flex items-center justify-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-bold text-on-primary"
                   >
                     <span className="material-symbols-outlined text-[16px]">
                       add
                     </span>
                     Add media
-                  </button>
+                  </SubmitButton>
                 </form>
               )}
             </article>
@@ -444,15 +443,14 @@ export default async function ProjectPage({
                     placeholder="https://www.youtube.com/watch?v=…"
                     className="flex-1 rounded-xl border-2 border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface placeholder:text-on-surface-variant/50 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/15"
                   />
-                  <button
-                    type="submit"
+                  <SubmitButton
                     className="sticker-shadow inline-flex items-center justify-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-bold text-on-primary"
                   >
                     <span className="material-symbols-outlined text-[16px]">
                       add
                     </span>
                     Add media
-                  </button>
+                  </SubmitButton>
                 </form>
               </article>
             )}
@@ -536,12 +534,11 @@ export default async function ProjectPage({
                           className="mt-2"
                         >
                           <input type="hidden" name="id" value={entry.id} />
-                          <button
-                            type="submit"
+                          <SubmitButton
                             className="text-[10px] font-bold text-on-surface-variant hover:text-destructive"
                           >
                             Delete
-                          </button>
+                          </SubmitButton>
                         </form>
                       )}
                     </li>
@@ -580,15 +577,14 @@ export default async function ProjectPage({
                     className="w-full rounded-xl border-2 border-outline-variant bg-surface-container-lowest px-3 py-2 text-on-surface placeholder:text-on-surface-variant/50 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/15"
                   />
                 </label>
-                <button
-                  type="submit"
+                <SubmitButton
                   className="sticker-shadow inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2 font-bold text-on-primary transition-transform active:scale-95"
                 >
                   <span className="material-symbols-outlined text-[18px]">
                     add
                   </span>
                   Post update
-                </button>
+                </SubmitButton>
               </form>
             )}
           </section>
@@ -610,8 +606,7 @@ export default async function ProjectPage({
                   >
                     <input type="hidden" name="teamId" value={project.id} />
                     <input type="hidden" name="type" value={r.type} />
-                    <button
-                      type="submit"
+                    <SubmitButton
                       className={`inline-flex items-center gap-2 rounded-full border-2 px-4 py-2 text-sm font-bold transition-all ${
                         active
                           ? "border-primary bg-primary-fixed text-on-primary-fixed-variant"
@@ -631,7 +626,7 @@ export default async function ProjectPage({
                           {count}
                         </span>
                       )}
-                    </button>
+                    </SubmitButton>
                   </form>
                 );
               })}
@@ -702,12 +697,11 @@ export default async function ProjectPage({
                       {canDelete && (
                         <form action={deleteProjectComment} className="mt-2">
                           <input type="hidden" name="id" value={c.id} />
-                          <button
-                            type="submit"
+                          <SubmitButton
                             className="text-[10px] font-bold text-on-surface-variant hover:text-destructive"
                           >
                             Delete
-                          </button>
+                          </SubmitButton>
                         </form>
                       )}
                     </li>
@@ -735,15 +729,14 @@ export default async function ProjectPage({
                   className="w-full rounded-xl border-2 border-outline-variant bg-surface-container-lowest px-3 py-2 text-on-surface placeholder:text-on-surface-variant/50 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/15"
                 />
               </label>
-              <button
-                type="submit"
+              <SubmitButton
                 className="sticker-shadow inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2 font-bold text-on-primary transition-transform active:scale-95"
               >
                 <span className="material-symbols-outlined text-[18px]">
                   send
                 </span>
                 Post comment
-              </button>
+              </SubmitButton>
             </form>
           </section>
         </section>

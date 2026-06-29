@@ -13,6 +13,7 @@ import {
 import { LessonBody } from "@/components/lessons/lesson-body";
 import { MediaEmbed } from "@/components/gallery/media-embed";
 import { WallRealtime } from "@/components/wall/wall-realtime";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export const metadata = { title: "Post · Show & Tell · Karya Sanga" };
 
@@ -262,15 +263,14 @@ export default async function WallPostPage({
             >
               <input type="hidden" name="id" value={post.id} />
               <input type="hidden" name="redirectTo" value="/wall" />
-              <button
-                type="submit"
+              <SubmitButton
                 className="inline-flex items-center gap-1 text-xs font-bold text-on-surface-variant transition-colors hover:text-destructive"
               >
                 <span className="material-symbols-outlined text-[14px]">
                   delete
                 </span>
                 Remove this post
-              </button>
+              </SubmitButton>
             </form>
           )}
         </div>

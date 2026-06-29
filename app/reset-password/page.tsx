@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { requestPasswordReset } from "@/lib/actions/auth";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export const metadata = { title: "Reset password · Karya Sanga" };
 
@@ -75,15 +76,15 @@ export default async function ResetPasswordPage({
                   className="block w-full rounded-2xl border-2 border-outline-variant bg-surface-container-lowest px-4 py-3 font-medium text-on-surface placeholder:text-on-surface-variant/50 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/15"
                 />
               </label>
-              <button
-                type="submit"
+              <SubmitButton
                 className="sticker-shadow inline-flex w-full items-center justify-center gap-2 rounded-full bg-primary px-6 py-3 font-bold text-on-primary"
+                pendingText="Sending…"
               >
                 <span className="material-symbols-outlined text-[18px]">
                   send
                 </span>
                 Send reset link
-              </button>
+              </SubmitButton>
               <p className="pt-2 text-center text-sm text-on-surface-variant">
                 Remember it?{" "}
                 <Link

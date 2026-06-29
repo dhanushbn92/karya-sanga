@@ -6,6 +6,7 @@ import {
   adminAwardBadge,
   adminRevokeBadge,
 } from "@/lib/actions/alumni";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export const metadata = { title: "Badges · Admin" };
 
@@ -123,15 +124,14 @@ export default async function BadgesAdminPage() {
             />
           </label>
           <div className="md:col-span-12">
-            <button
-              type="submit"
+            <SubmitButton
               className="saffron-glow inline-flex items-center gap-2 rounded-xl bg-primary px-6 py-3 font-medium text-on-primary"
             >
               <span className="material-symbols-outlined text-[18px]">
                 workspace_premium
               </span>
               Award badge
-            </button>
+            </SubmitButton>
           </div>
         </form>
       </section>
@@ -167,12 +167,11 @@ export default async function BadgesAdminPage() {
                 </div>
                 <form action={adminRevokeBadge}>
                   <input type="hidden" name="id" value={eb.id} />
-                  <button
-                    type="submit"
+                  <SubmitButton
                     className="mono-label inline-flex items-center gap-1 rounded-full border border-white/20 px-3 py-1 text-on-surface-variant hover:border-destructive hover:text-destructive"
                   >
                     Revoke
-                  </button>
+                  </SubmitButton>
                 </form>
               </li>
             ))}

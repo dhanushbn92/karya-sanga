@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireRole } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { createModule } from "@/lib/actions/admin-lessons";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export const metadata = { title: "Chapters · Admin" };
 
@@ -84,15 +85,14 @@ export default async function ModulesAdminPage() {
             />
           </label>
           <div className="md:col-span-12">
-            <button
-              type="submit"
+            <SubmitButton
               className="saffron-glow inline-flex items-center gap-2 rounded-xl bg-primary px-6 py-3 font-medium text-on-primary transition-colors hover:bg-primary-container hover:text-on-primary-container"
             >
               <span className="material-symbols-outlined text-[18px]">
                 add
               </span>
               Create chapter
-            </button>
+            </SubmitButton>
           </div>
         </form>
       </section>

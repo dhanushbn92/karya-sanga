@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { joinWorkshop } from "@/lib/actions/alumni";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export const metadata = { title: "Workshops · Karya Sanga" };
 
@@ -500,15 +501,14 @@ function WorkshopGrid({
               ) : (
                 <form action={joinWorkshop}>
                   <input type="hidden" name="cohortId" value={c.id} />
-                  <button
-                    type="submit"
+                  <SubmitButton
                     className="sticker-shadow inline-flex items-center gap-1 rounded-full bg-primary px-3.5 py-1.5 text-xs font-bold text-on-primary transition-transform active:scale-95"
                   >
                     <span className="material-symbols-outlined text-[14px]">
                       group_add
                     </span>
                     Join
-                  </button>
+                  </SubmitButton>
                 </form>
               )}
             </div>

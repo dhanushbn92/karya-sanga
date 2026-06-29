@@ -17,6 +17,7 @@ import {
   adminRemoveMember,
   adminTransferCaptain,
 } from "@/lib/actions/admin-hackathon";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export const metadata = { title: "Team management · Admin" };
 
@@ -205,15 +206,14 @@ export default async function AdminTeamsPage() {
             </span>
           </label>
           <div className="md:col-span-12">
-            <button
-              type="submit"
+            <SubmitButton
               className="saffron-glow inline-flex items-center gap-2 rounded-xl bg-primary px-6 py-3 font-medium text-on-primary transition-colors hover:bg-primary-container hover:text-on-primary-container"
             >
               <span className="material-symbols-outlined text-[18px]">
                 group_add
               </span>
               Create team
-            </button>
+            </SubmitButton>
           </div>
         </form>
       </section>
@@ -317,15 +317,14 @@ export default async function AdminTeamsPage() {
                           );
                         })}
                       </select>
-                      <button
-                        type="submit"
+                      <SubmitButton
                         className="mono-label inline-flex items-center gap-1 rounded-full bg-primary px-3 py-2 text-on-primary hover:brightness-110"
                       >
                         <span className="material-symbols-outlined text-[14px]">
                           add
                         </span>
                         Place
-                      </button>
+                      </SubmitButton>
                     </form>
                   )}
                 </li>
@@ -390,15 +389,14 @@ export default async function AdminTeamsPage() {
                       </Link>
                       <form action={adminDeleteTeam}>
                         <input type="hidden" name="teamId" value={t.id} />
-                        <button
-                          type="submit"
+                        <SubmitButton
                           className="mono-label inline-flex items-center gap-1 rounded-full border border-white/20 px-3 py-1 text-on-surface-variant hover:border-destructive hover:text-destructive"
                         >
                           <span className="material-symbols-outlined text-[12px]">
                             delete
                           </span>
                           Delete team
-                        </button>
+                        </SubmitButton>
                       </form>
                     </div>
                   </div>
@@ -445,15 +443,14 @@ export default async function AdminTeamsPage() {
                                   name="memberId"
                                   value={m.id}
                                 />
-                                <button
-                                  type="submit"
+                                <SubmitButton
                                   className="mono-label inline-flex items-center gap-1 rounded-full border border-white/20 px-3 py-1 text-on-surface-variant hover:border-primary/40 hover:text-primary"
                                 >
                                   <span className="material-symbols-outlined text-[12px]">
                                     star
                                   </span>
                                   Make captain
-                                </button>
+                                </SubmitButton>
                               </form>
                             )}
 
@@ -496,12 +493,11 @@ export default async function AdminTeamsPage() {
                                       );
                                     })}
                                 </select>
-                                <button
-                                  type="submit"
+                                <SubmitButton
                                   className="mono-label inline-flex items-center rounded-full bg-white/5 px-2 py-1 text-on-surface-variant hover:bg-white/10"
                                 >
                                   →
-                                </button>
+                                </SubmitButton>
                               </form>
                             )}
 
@@ -511,15 +507,14 @@ export default async function AdminTeamsPage() {
                                 name="memberId"
                                 value={m.id}
                               />
-                              <button
-                                type="submit"
+                              <SubmitButton
                                 className="mono-label inline-flex items-center gap-1 rounded-full border border-white/20 px-3 py-1 text-on-surface-variant hover:border-destructive hover:text-destructive"
                               >
                                 <span className="material-symbols-outlined text-[12px]">
                                   remove
                                 </span>
                                 Remove
-                              </button>
+                              </SubmitButton>
                             </form>
                           </div>
                         </li>
@@ -552,15 +547,14 @@ export default async function AdminTeamsPage() {
                           </option>
                         ))}
                       </select>
-                      <button
-                        type="submit"
+                      <SubmitButton
                         className="mono-label inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1.5 text-on-primary hover:brightness-110"
                       >
                         <span className="material-symbols-outlined text-[12px]">
                           add
                         </span>
                         Add
-                      </button>
+                      </SubmitButton>
                     </form>
                   )}
                   {slotsLeft <= 0 && (
