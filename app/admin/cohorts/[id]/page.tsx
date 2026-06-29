@@ -11,10 +11,12 @@ import {
   module as moduleTable,
   badge,
   hackathonConfig,
+  workshopFeedback,
 } from "@/lib/db";
 import {
   addUserToWorkshop,
   adminAssignUserToCohort,
+  adminAwardBadge,
   createWorkshopBadge,
   deleteCohort,
   deleteWorkshopBadge,
@@ -74,6 +76,7 @@ export default async function CohortEditPage({
     allModulesRaw,
     workshopBadgesRaw,
     workshopHackathonConfig,
+    feedbackRows,
   ] = await Promise.all([
       db.query.cohort
         .findFirst({
@@ -186,6 +189,15 @@ export default async function CohortEditPage({
       db.query.hackathonConfig.findFirst({
         where: eq(hackathonConfig.cohortId, id),
       }),
+      // All feedback left for this workshop, newest first, with the author so
+      // the admin view can show name + stars + comment and an average.
+      db.query.workshopFeedback.findMany({
+        where: eq(workshopFeedback.cohortId, id),
+        orderBy: (f, { desc }) => [desc(f.createdAt)],
+        with: {
+          user: { columns: { id: true, name: true, email: true, handle: true } },
+        },
+      }),
     ]);
   if (!cohort) notFound();
 
@@ -217,6 +229,13 @@ export default async function CohortEditPage({
 
   const attachedIds = new Set(attachedRows.map((r) => r.moduleId));
   const unattachedModules = allModules.filter((m) => !attachedIds.has(m.id));
+
+  // Workshop feedback summary — average rating across all ratings left.
+  const feedbackCount = feedbackRows.length;
+  const avgRating =
+    feedbackCount === 0
+      ? 0
+      : feedbackRows.reduce((s, f) => s + f.rating, 0) / feedbackCount;
 
   // For the secondary-membership picker: people not already in this workshop
   // (primary OR secondary). Primary-cohort name shown as context.
@@ -359,7 +378,7 @@ export default async function CohortEditPage({
             {cohort.members.map((m) => (
               <li
                 key={m.id}
-                className="glass-card flex items-center justify-between rounded-xl p-3"
+                className="glass-card flex flex-wrap items-center justify-between gap-3 rounded-xl p-3"
               >
                 <div className="min-w-0">
                   <div className="truncate text-sm font-medium text-on-surface">
@@ -369,18 +388,60 @@ export default async function CohortEditPage({
                     {m.email} · {m.role}
                   </div>
                 </div>
-                <form action={adminAssignUserToCohort}>
-                  <input type="hidden" name="userId" value={m.id} />
-                  <input type="hidden" name="cohortId" value="" />
-                  <SubmitButton
-                    className="mono-label inline-flex items-center gap-1 rounded-full border border-white/20 px-3 py-1 text-on-surface-variant hover:border-destructive hover:text-destructive"
-                  >
-                    <span className="material-symbols-outlined text-[12px]">
-                      remove
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* Award one of this workshop's badges to this member. */}
+                  {workshopBadges.length > 0 ? (
+                    <form
+                      action={adminAwardBadge}
+                      className="flex items-center gap-2"
+                    >
+                      <input type="hidden" name="userId" value={m.id} />
+                      <label className="sr-only" htmlFor={`badge-${m.id}`}>
+                        Badge to award
+                      </label>
+                      <select
+                        id={`badge-${m.id}`}
+                        name="badgeSlug"
+                        required
+                        defaultValue=""
+                        className="rounded-full border border-white/10 bg-surface-container-low px-3 py-1 text-xs text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      >
+                        <option value="" disabled>
+                          Award badge…
+                        </option>
+                        {workshopBadges.map((b) => (
+                          <option key={b.id} value={b.slug}>
+                            {b.name}
+                          </option>
+                        ))}
+                      </select>
+                      <SubmitButton
+                        className="mono-label inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1 text-on-primary hover:brightness-110"
+                      >
+                        <span className="material-symbols-outlined text-[12px]">
+                          workspace_premium
+                        </span>
+                        Award
+                      </SubmitButton>
+                    </form>
+                  ) : (
+                    <span className="mono-label text-on-surface-variant">
+                      Create a workshop badge to award
                     </span>
-                    Remove
-                  </SubmitButton>
-                </form>
+                  )}
+                  <form action={adminAssignUserToCohort}>
+                    <input type="hidden" name="userId" value={m.id} />
+                    <input type="hidden" name="cohortId" value="" />
+                    <SubmitButton
+                      className="mono-label inline-flex items-center gap-1 rounded-full border border-white/20 px-3 py-1 text-on-surface-variant hover:border-destructive hover:text-destructive"
+                    >
+                      <span className="material-symbols-outlined text-[12px]">
+                        remove
+                      </span>
+                      Remove
+                    </SubmitButton>
+                  </form>
+                </div>
               </li>
             ))}
           </ul>
@@ -1018,6 +1079,66 @@ export default async function CohortEditPage({
         </form>
       </section>
 
+      {/* Workshop feedback — read-only review of participant ratings */}
+      <section className="mt-10">
+        <div className="mb-4 flex items-end justify-between">
+          <div>
+            <h2 className="text-headline-md text-on-surface">Feedback</h2>
+            <p className="mt-1 text-sm text-on-surface-variant">
+              What participants think of this workshop. Only you and other
+              teachers see this.
+            </p>
+          </div>
+          {feedbackCount > 0 && (
+            <div className="flex items-center gap-2 rounded-full border border-white/10 bg-surface-container-low px-3 py-1.5">
+              <Stars rating={Math.round(avgRating)} />
+              <span className="mono-label text-on-surface">
+                {avgRating.toFixed(1)} / 5
+              </span>
+              <span className="mono-label text-on-surface-variant">
+                · {feedbackCount} rating{feedbackCount === 1 ? "" : "s"}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {feedbackCount === 0 ? (
+          <p className="rounded-2xl border border-dashed border-white/10 bg-surface-container-low p-5 text-sm text-on-surface-variant">
+            No feedback yet. Participants can rate the workshop from its
+            page.
+          </p>
+        ) : (
+          <ul className="space-y-2">
+            {feedbackRows.map((f) => {
+              const name = f.user.name ?? f.user.email.split("@")[0];
+              return (
+                <li key={f.id} className="glass-card rounded-xl p-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Stars rating={f.rating} />
+                    <span className="mono-label text-on-surface">
+                      {f.rating} / 5
+                    </span>
+                    <span className="text-sm font-medium text-on-surface">
+                      {name}
+                    </span>
+                    {f.user.handle && (
+                      <span className="mono-label text-on-surface-variant">
+                        @{f.user.handle}
+                      </span>
+                    )}
+                  </div>
+                  {f.comment && (
+                    <p className="mt-2 whitespace-pre-wrap text-sm text-on-surface-variant">
+                      {f.comment}
+                    </p>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+
       {/* Hackathon config — per-workshop override */}
       <section className="mt-10">
         <div className="mb-4">
@@ -1202,5 +1323,27 @@ export default async function CohortEditPage({
         </section>
       )}
     </main>
+  );
+}
+
+// ─── helpers ─────────────────────────────────────────────────────
+
+/** Static 0–5 star display (filled up to `rating`). */
+function Stars({ rating }: { rating: number }) {
+  return (
+    <span className="inline-flex items-center" aria-label={`${rating} of 5 stars`}>
+      {[1, 2, 3, 4, 5].map((n) => (
+        <span
+          key={n}
+          className={`material-symbols-outlined text-[16px] leading-none ${
+            n <= rating ? "text-primary" : "text-on-surface-variant/40"
+          }`}
+          style={n <= rating ? { fontVariationSettings: "'FILL' 1" } : undefined}
+          aria-hidden="true"
+        >
+          star
+        </span>
+      ))}
+    </span>
   );
 }

@@ -130,12 +130,31 @@ export default async function BuilderPage({
     tags: p.tags ?? [],
   }));
 
-  const workshopBadges = builder.earnedBadges.filter(
-    (b) => b.badge.category === "workshop",
+  // Group earned-badge rows by the distinct badge (a badge can be earned more
+  // than once now). Keep the most-recent earn as the representative row and
+  // track how many times it was earned, so the chip can show a ×N superscript.
+  const groupBadges = (
+    rows: typeof builder.earnedBadges,
+  ): GroupedBadge[] => {
+    const byId = new Map<string, GroupedBadge>();
+    for (const eb of rows) {
+      const existing = byId.get(eb.badge.id);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        byId.set(eb.badge.id, { eb, count: 1 });
+      }
+    }
+    return [...byId.values()];
+  };
+
+  const workshopBadges = groupBadges(
+    builder.earnedBadges.filter((b) => b.badge.category === "workshop"),
   );
-  const platformBadges = builder.earnedBadges.filter(
-    (b) => b.badge.category === "platform",
+  const platformBadges = groupBadges(
+    builder.earnedBadges.filter((b) => b.badge.category === "platform"),
   );
+  const distinctBadgeCount = workshopBadges.length + platformBadges.length;
   const displayName = builder.name ?? builder.email.split("@")[0];
   const buildLogCount = builder.teamMembership?.team._count.buildLogEntries ?? 0;
 
@@ -244,8 +263,8 @@ export default async function BuilderPage({
       <div className="mb-8 grid grid-cols-2 gap-3 md:grid-cols-4">
         <StatTile
           icon="workspace_premium"
-          n={builder.earnedBadges.length}
-          label={`badge${builder.earnedBadges.length === 1 ? "" : "s"}`}
+          n={distinctBadgeCount}
+          label={`badge${distinctBadgeCount === 1 ? "" : "s"}`}
         />
         <StatTile
           icon="menu_book"
@@ -285,8 +304,8 @@ export default async function BuilderPage({
                       Workshop
                     </h3>
                     <ul className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-3">
-                      {workshopBadges.map((eb) => (
-                        <BadgeChip key={eb.id} eb={eb} />
+                      {workshopBadges.map((g) => (
+                        <BadgeChip key={g.eb.badge.id} eb={g.eb} count={g.count} />
                       ))}
                     </ul>
                   </>
@@ -297,8 +316,8 @@ export default async function BuilderPage({
                       Platform
                     </h3>
                     <ul className="grid grid-cols-2 gap-3 md:grid-cols-3">
-                      {platformBadges.map((eb) => (
-                        <BadgeChip key={eb.id} eb={eb} />
+                      {platformBadges.map((g) => (
+                        <BadgeChip key={g.eb.badge.id} eb={g.eb} count={g.count} />
                       ))}
                     </ul>
                   </>
@@ -506,14 +525,14 @@ export default async function BuilderPage({
 
 // ─── helpers ─────────────────────────────────────────────────────
 
-function BadgeChip({
-  eb,
-}: {
+/** A distinct badge plus how many times it was earned (representative row). */
+type GroupedBadge = {
   eb: {
     id: string;
     earnedAt: Date;
     note: string | null;
     badge: {
+      id: string;
       slug: string;
       name: string;
       icon: string;
@@ -521,12 +540,30 @@ function BadgeChip({
       description: string;
     };
   };
+  count: number;
+};
+
+function BadgeChip({
+  eb,
+  count,
+}: {
+  eb: GroupedBadge["eb"];
+  count: number;
 }) {
   return (
     <li
-      className={`rounded-2xl border-2 border-white p-3 ${TONE_BG[eb.badge.tone] ?? TONE_BG.primary}`}
-      title={`${eb.badge.description}\nEarned ${new Date(eb.earnedAt).toLocaleDateString()}`}
+      className={`relative rounded-2xl border-2 border-white p-3 ${TONE_BG[eb.badge.tone] ?? TONE_BG.primary}`}
+      title={
+        count > 1
+          ? `${eb.badge.description}\nEarned ${count}× · most recent ${new Date(eb.earnedAt).toLocaleDateString()}`
+          : `${eb.badge.description}\nEarned ${new Date(eb.earnedAt).toLocaleDateString()}`
+      }
     >
+      {count > 1 && (
+        <span className="absolute -right-1.5 -top-1.5 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full border-2 border-white bg-primary px-1 text-[10px] font-black leading-none text-on-primary">
+          ×{count}
+        </span>
+      )}
       <div className="flex items-center gap-2">
         <span className="material-symbols-outlined text-[20px]">
           {eb.badge.icon}

@@ -16,6 +16,7 @@ import {
   badge,
   earnedBadge,
   userCohort,
+  workshopFeedback,
 } from "@/lib/db";
 import { requireRole, requireUser } from "@/lib/auth";
 
@@ -506,25 +507,20 @@ export async function adminAwardBadge(formData: FormData): Promise<void> {
     }
   }
 
-  await db
-    .insert(earnedBadge)
-    .values({
-      id: createId(),
-      userId: parsed.data.userId,
-      badgeId: badgeRow.id,
-      note: parsed.data.note || null,
-      awardedById: me.id,
-    })
-    .onConflictDoUpdate({
-      target: [earnedBadge.userId, earnedBadge.badgeId],
-      set: {
-        note: parsed.data.note || null,
-        awardedById: me.id,
-      },
-    });
+  // A badge can be earned multiple times. Each award is its own row, tagged
+  // with the workshop the badge belongs to (null for general/platform badges).
+  await db.insert(earnedBadge).values({
+    id: createId(),
+    userId: parsed.data.userId,
+    badgeId: badgeRow.id,
+    cohortId: badgeRow.cohortId,
+    note: parsed.data.note || null,
+    awardedById: me.id,
+  });
 
   revalidatePath("/builders");
   revalidatePath("/admin/badges");
+  if (badgeRow.cohortId) revalidatePath(`/admin/cohorts/${badgeRow.cohortId}`);
 }
 
 export async function adminRevokeBadge(formData: FormData): Promise<void> {
@@ -534,6 +530,77 @@ export async function adminRevokeBadge(formData: FormData): Promise<void> {
   await db.delete(earnedBadge).where(eq(earnedBadge.id, id));
   revalidatePath("/builders");
   revalidatePath("/admin/badges");
+}
+
+// =====================================================================
+// Workshop feedback (participants rate their workshop)
+// =====================================================================
+
+/** True if the user belongs to the workshop (primary cohortId or UserCohort). */
+async function isWorkshopMember(
+  userId: string,
+  cohortId: string,
+): Promise<boolean> {
+  const primary = await db.query.user.findFirst({
+    where: and(eq(user.id, userId), eq(user.cohortId, cohortId)),
+    columns: { id: true },
+  });
+  if (primary) return true;
+  const secondary = await db.query.userCohort.findFirst({
+    where: and(eq(userCohort.userId, userId), eq(userCohort.cohortId, cohortId)),
+    columns: { id: true },
+  });
+  return !!secondary;
+}
+
+const workshopFeedbackSchema = z.object({
+  cohortId: z.string().min(1),
+  rating: z.coerce.number().int().min(1, "Pick a rating").max(5),
+  comment: z.string().max(2000).optional(),
+});
+
+/**
+ * A workshop participant leaves (or updates) their rating + comment. One
+ * feedback per user per workshop — re-submitting overwrites the previous one.
+ */
+export async function submitWorkshopFeedback(
+  formData: FormData,
+): Promise<void> {
+  const me = await requireUser();
+  const parsed = workshopFeedbackSchema.safeParse({
+    cohortId: formData.get("cohortId"),
+    rating: formData.get("rating"),
+    comment: formData.get("comment") ?? undefined,
+  });
+  if (!parsed.success) {
+    throw new Error(parsed.error.issues[0]?.message ?? "Invalid input");
+  }
+
+  if (!(await isWorkshopMember(me.id, parsed.data.cohortId))) {
+    throw new Error("Only members of this workshop can leave feedback.");
+  }
+
+  await db
+    .insert(workshopFeedback)
+    .values({
+      id: createId(),
+      cohortId: parsed.data.cohortId,
+      userId: me.id,
+      rating: parsed.data.rating,
+      comment: parsed.data.comment?.trim() || null,
+      updatedAt: new Date(),
+    })
+    .onConflictDoUpdate({
+      target: [workshopFeedback.cohortId, workshopFeedback.userId],
+      set: {
+        rating: parsed.data.rating,
+        comment: parsed.data.comment?.trim() || null,
+        updatedAt: new Date(),
+      },
+    });
+
+  revalidatePath(`/cohorts/${parsed.data.cohortId}`);
+  revalidatePath(`/admin/cohorts/${parsed.data.cohortId}`);
 }
 
 // =====================================================================

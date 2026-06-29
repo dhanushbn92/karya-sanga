@@ -10,6 +10,7 @@ import {
   team,
   teamMember,
   workshopModule,
+  workshopFeedback,
 } from "@/lib/db";
 import {
   createCohortPost,
@@ -17,6 +18,7 @@ import {
   joinWorkshop,
   leaveWorkshop,
   pinCohortPost,
+  submitWorkshopFeedback,
 } from "@/lib/actions/alumni";
 import { getHackathonConfig } from "@/lib/hackathon-config";
 import { SubmitButton } from "@/components/ui/submit-button";
@@ -74,6 +76,7 @@ export default async function WorkshopPage({
     projectsRaw,
     hackathonConfig,
     myTeamMemberships,
+    myFeedback,
   ] = await Promise.all([
       db.query.cohort.findFirst({
         where: eq(cohortTable.id, id),
@@ -242,6 +245,15 @@ export default async function WorkshopPage({
             },
           },
         },
+      }),
+      // The viewer's existing feedback for this workshop (if any), used to
+      // pre-fill the "Rate this workshop" form. One row per user per workshop.
+      db.query.workshopFeedback.findFirst({
+        where: and(
+          eq(workshopFeedback.cohortId, id),
+          eq(workshopFeedback.userId, me.id),
+        ),
+        columns: { id: true, rating: true, comment: true },
       }),
     ]);
   if (!cohortRaw) notFound();
@@ -557,6 +569,104 @@ export default async function WorkshopPage({
               </Link>
             )}
           </div>
+        </section>
+      )}
+
+      {/* ──────────────────────────────────────────────────────────
+       * 2b. RATE THIS WORKSHOP (member-only)
+       * ────────────────────────────────────────────────────────── */}
+      {isMember && (
+        <section className="sticker-shadow mb-10 rounded-[28px] border-2 border-outline-variant bg-card p-6 md:p-8">
+          <div className="mb-4">
+            <span className="rotate-sticker inline-flex items-center gap-2 rounded-full border-2 border-white bg-tertiary-fixed px-3 py-1 text-xs font-bold text-on-tertiary-fixed shadow-sm">
+              <span className="material-symbols-outlined text-[14px]">
+                reviews
+              </span>
+              Feedback
+            </span>
+            <h2 className="text-headline-md mt-3 text-on-surface">
+              {myFeedback ? "Update your feedback" : "Rate this workshop"}
+            </h2>
+            <p className="mt-1 text-sm text-on-surface-variant">
+              {myFeedback
+                ? "You've already shared your thoughts — tweak them any time."
+                : "How is this workshop going for you? Your teachers see this."}
+            </p>
+          </div>
+          <form action={submitWorkshopFeedback} className="space-y-4">
+            <input type="hidden" name="cohortId" value={cohort.id} />
+            <fieldset>
+              <legend className="mono-label mb-2 text-on-surface-variant">
+                Your rating
+              </legend>
+              {/* 5 radios styled as stars; the highest checked one wins. CSS
+               * sibling selectors fill all stars up to the hovered/checked one
+               * (peer-* utilities aren't directional, so a scoped style block
+               * drives the fill). */}
+              {/* row-reverse so 5 is in the DOM first; the general-sibling
+               * combinator then fills the checked star and every star after
+               * it (which sit to its left visually = lower numbers). Hover
+               * uses :has so the whole run lights up on the way in. */}
+              <style>{`
+                .star-rating > span > label { color: var(--md-sys-color-on-surface-variant, currentColor); }
+                .star-rating > span:has(input:checked) ~ span > label,
+                .star-rating > span:has(input:checked) > label { color: var(--md-sys-color-primary, #842bd2); }
+                .star-rating:hover > span:has(input:hover) ~ span > label,
+                .star-rating:hover > span:has(input:hover) > label { color: var(--md-sys-color-primary, #842bd2); }
+              `}</style>
+              <div className="star-rating inline-flex flex-row-reverse items-center gap-1">
+                {[5, 4, 3, 2, 1].map((n) => (
+                  <span key={n} className="contents">
+                    <input
+                      id={`rating-${n}`}
+                      type="radio"
+                      name="rating"
+                      value={n}
+                      required
+                      defaultChecked={myFeedback?.rating === n}
+                      className="peer sr-only"
+                    />
+                    <label
+                      htmlFor={`rating-${n}`}
+                      title={`${n} star${n === 1 ? "" : "s"}`}
+                      className="cursor-pointer transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-[32px] leading-none">
+                        star
+                      </span>
+                      <span className="sr-only">
+                        {n} star{n === 1 ? "" : "s"}
+                      </span>
+                    </label>
+                  </span>
+                ))}
+              </div>
+            </fieldset>
+            <label className="block space-y-1">
+              <span className="mono-label block text-on-surface-variant">
+                Comment (optional)
+              </span>
+              <textarea
+                name="comment"
+                rows={3}
+                maxLength={2000}
+                defaultValue={myFeedback?.comment ?? ""}
+                placeholder="What's working? What could be better?"
+                className="w-full resize-none rounded-xl border-2 border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/15"
+              />
+            </label>
+            <div className="flex justify-end">
+              <SubmitButton
+                pendingText="Saving…"
+                className="sticker-shadow inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2 font-bold text-on-primary"
+              >
+                <span className="material-symbols-outlined text-[16px]">
+                  send
+                </span>
+                Submit feedback
+              </SubmitButton>
+            </div>
+          </form>
         </section>
       )}
 

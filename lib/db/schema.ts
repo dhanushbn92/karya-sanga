@@ -122,13 +122,17 @@ export const earnedBadge = pgTable("EarnedBadge", {
 	id: text().primaryKey().notNull(),
 	userId: uuid().notNull(),
 	badgeId: text().notNull(),
+	// Which workshop this award was given in. A badge can be earned multiple
+	// times (the old unique(userId,badgeId) constraint is dropped), each award
+	// tied to the workshop it was earned in.
+	cohortId: text(),
 	note: text(),
 	awardedById: uuid(),
 	earnedAt: timestamp({ precision: 3, mode: 'date' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
 }, (table) => [
 	index("EarnedBadge_badgeId_idx").using("btree", table.badgeId.asc().nullsLast().op("text_ops")),
-	uniqueIndex("EarnedBadge_userId_badgeId_key").using("btree", table.userId.asc().nullsLast().op("text_ops"), table.badgeId.asc().nullsLast().op("uuid_ops")),
 	index("EarnedBadge_userId_idx").using("btree", table.userId.asc().nullsLast().op("uuid_ops")),
+	index("EarnedBadge_cohortId_idx").using("btree", table.cohortId.asc().nullsLast().op("text_ops")),
 	foreignKey({
 			columns: [table.awardedById],
 			foreignColumns: [user.id],
@@ -143,6 +147,34 @@ export const earnedBadge = pgTable("EarnedBadge", {
 			columns: [table.userId],
 			foreignColumns: [user.id],
 			name: "EarnedBadge_userId_fkey"
+		}).onUpdate("cascade").onDelete("cascade"),
+	foreignKey({
+			columns: [table.cohortId],
+			foreignColumns: [cohort.id],
+			name: "EarnedBadge_cohortId_fkey"
+		}).onUpdate("cascade").onDelete("set null"),
+]);
+
+export const workshopFeedback = pgTable("WorkshopFeedback", {
+	id: text().primaryKey().notNull(),
+	cohortId: text().notNull(),
+	userId: uuid().notNull(),
+	rating: integer().notNull(),
+	comment: text(),
+	createdAt: timestamp({ precision: 3, mode: 'date' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+	updatedAt: timestamp({ precision: 3, mode: 'date' }).notNull(),
+}, (table) => [
+	uniqueIndex("WorkshopFeedback_cohortId_userId_key").using("btree", table.cohortId.asc().nullsLast().op("text_ops"), table.userId.asc().nullsLast().op("uuid_ops")),
+	index("WorkshopFeedback_cohortId_idx").using("btree", table.cohortId.asc().nullsLast().op("text_ops")),
+	foreignKey({
+			columns: [table.cohortId],
+			foreignColumns: [cohort.id],
+			name: "WorkshopFeedback_cohortId_fkey"
+		}).onUpdate("cascade").onDelete("cascade"),
+	foreignKey({
+			columns: [table.userId],
+			foreignColumns: [user.id],
+			name: "WorkshopFeedback_userId_fkey"
 		}).onUpdate("cascade").onDelete("cascade"),
 ]);
 
