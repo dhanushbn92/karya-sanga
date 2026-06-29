@@ -3,7 +3,20 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { prisma } from "@/lib/prisma";
+import { and, eq, ne, or } from "drizzle-orm";
+import { createId } from "@paralleldrive/cuid2";
+import {
+  db,
+  user,
+  cohort,
+  cohortPost,
+  team,
+  teamMember,
+  buildLogEntry,
+  badge,
+  earnedBadge,
+  userCohort,
+} from "@/lib/db";
 import { requireRole, requireUser } from "@/lib/auth";
 
 /**
@@ -60,19 +73,16 @@ export async function updateMyProfile(formData: FormData): Promise<void> {
 
   // Handle uniqueness — surface a friendly error rather than the DB constraint.
   if (parsed.data.handle && parsed.data.handle.length > 0) {
-    const taken = await prisma.user.findFirst({
-      where: {
-        handle: parsed.data.handle,
-        NOT: { id: me.id },
-      },
-      select: { id: true },
+    const taken = await db.query.user.findFirst({
+      where: and(eq(user.handle, parsed.data.handle), ne(user.id, me.id)),
+      columns: { id: true },
     });
     if (taken) throw new Error("That handle is taken. Try another.");
   }
 
-  await prisma.user.update({
-    where: { id: me.id },
-    data: {
+  await db
+    .update(user)
+    .set({
       name: parsed.data.name,
       handle: parsed.data.handle || null,
       bio: parsed.data.bio || null,
@@ -81,8 +91,8 @@ export async function updateMyProfile(formData: FormData): Promise<void> {
       profilePublic: parsed.data.profilePublic,
       mentorAvailable: parsed.data.mentorAvailable,
       dob: parsed.data.dob ? new Date(parsed.data.dob) : null,
-    },
-  });
+    })
+    .where(eq(user.id, me.id));
 
   revalidatePath("/settings/profile");
   revalidatePath("/builders");
@@ -123,22 +133,24 @@ export async function createCohort(formData: FormData): Promise<void> {
 
   // Only one "current" cohort at a time; auto-clear any prior one.
   if (parsed.data.current) {
-    await prisma.cohort.updateMany({
-      where: { current: true },
-      data: { current: false },
-    });
+    await db
+      .update(cohort)
+      .set({ current: false, updatedAt: new Date() })
+      .where(eq(cohort.current, true));
   }
 
-  const created = await prisma.cohort.create({
-    data: {
+  const [created] = await db
+    .insert(cohort)
+    .values({
+      id: createId(),
       name: parsed.data.name,
       description: parsed.data.description || null,
       startedOn: parseDateOrNull(parsed.data.startedOn),
       endedOn: parseDateOrNull(parsed.data.endedOn),
       current: parsed.data.current,
-    },
-    select: { id: true },
-  });
+      updatedAt: new Date(),
+    })
+    .returning({ id: cohort.id });
 
   revalidatePath("/admin/cohorts");
   redirect(`/admin/cohorts/${created.id}`);
@@ -161,22 +173,23 @@ export async function updateCohort(formData: FormData): Promise<void> {
   }
 
   if (parsed.data.current) {
-    await prisma.cohort.updateMany({
-      where: { current: true, NOT: { id: parsed.data.id } },
-      data: { current: false },
-    });
+    await db
+      .update(cohort)
+      .set({ current: false, updatedAt: new Date() })
+      .where(and(eq(cohort.current, true), ne(cohort.id, parsed.data.id)));
   }
 
-  await prisma.cohort.update({
-    where: { id: parsed.data.id },
-    data: {
+  await db
+    .update(cohort)
+    .set({
       name: parsed.data.name,
       description: parsed.data.description || null,
       startedOn: parseDateOrNull(parsed.data.startedOn),
       endedOn: parseDateOrNull(parsed.data.endedOn),
       current: parsed.data.current,
-    },
-  });
+      updatedAt: new Date(),
+    })
+    .where(eq(cohort.id, parsed.data.id));
   revalidatePath("/admin/cohorts");
   revalidatePath(`/admin/cohorts/${parsed.data.id}`);
   revalidatePath(`/cohorts/${parsed.data.id}`);
@@ -186,7 +199,7 @@ export async function deleteCohort(formData: FormData): Promise<void> {
   await requireRole(["admin", "instructor"]);
   const id = String(formData.get("id") ?? "");
   if (!id) throw new Error("Missing id");
-  await prisma.cohort.delete({ where: { id } });
+  await db.delete(cohort).where(eq(cohort.id, id));
   revalidatePath("/admin/cohorts");
   revalidatePath("/builders");
   redirect("/admin/cohorts");
@@ -207,10 +220,10 @@ export async function adminAssignUserToCohort(
   });
   if (!parsed.success) throw new Error("Invalid input");
 
-  await prisma.user.update({
-    where: { id: parsed.data.userId },
-    data: { cohortId: parsed.data.cohortId || null },
-  });
+  await db
+    .update(user)
+    .set({ cohortId: parsed.data.cohortId || null })
+    .where(eq(user.id, parsed.data.userId));
   revalidatePath("/admin/cohorts");
   revalidatePath("/builders");
 }
@@ -238,21 +251,21 @@ export async function createCohortPost(formData: FormData): Promise<void> {
   // Admin / instructor can post in any cohort (e.g. instructor recap).
   const isMod = me.role === "admin" || me.role === "instructor";
   if (!isMod) {
-    const user = await prisma.user.findUnique({
-      where: { id: me.id },
-      select: { cohortId: true },
+    const u = await db.query.user.findFirst({
+      where: eq(user.id, me.id),
+      columns: { cohortId: true },
     });
-    if (!user || user.cohortId !== parsed.data.cohortId) {
+    if (!u || u.cohortId !== parsed.data.cohortId) {
       throw new Error("You're not in this cohort.");
     }
   }
 
-  await prisma.cohortPost.create({
-    data: {
-      cohortId: parsed.data.cohortId,
-      authorId: me.id,
-      body: parsed.data.body.trim(),
-    },
+  await db.insert(cohortPost).values({
+    id: createId(),
+    cohortId: parsed.data.cohortId,
+    authorId: me.id,
+    body: parsed.data.body.trim(),
+    updatedAt: new Date(),
   });
   revalidatePath(`/cohorts/${parsed.data.cohortId}`);
 }
@@ -262,9 +275,9 @@ export async function deleteCohortPost(formData: FormData): Promise<void> {
   const id = String(formData.get("id") ?? "");
   if (!id) throw new Error("Missing id");
 
-  const post = await prisma.cohortPost.findUnique({
-    where: { id },
-    select: { authorId: true, cohortId: true },
+  const post = await db.query.cohortPost.findFirst({
+    where: eq(cohortPost.id, id),
+    columns: { authorId: true, cohortId: true },
   });
   if (!post) throw new Error("Post not found");
 
@@ -273,7 +286,7 @@ export async function deleteCohortPost(formData: FormData): Promise<void> {
     throw new Error("Not allowed");
   }
 
-  await prisma.cohortPost.delete({ where: { id } });
+  await db.delete(cohortPost).where(eq(cohortPost.id, id));
   revalidatePath(`/cohorts/${post.cohortId}`);
 }
 
@@ -281,11 +294,11 @@ export async function pinCohortPost(formData: FormData): Promise<void> {
   await requireRole(["admin", "instructor"]);
   const id = String(formData.get("id") ?? "");
   const pinned = formData.get("pinned") === "on";
-  const post = await prisma.cohortPost.update({
-    where: { id },
-    data: { pinned },
-    select: { cohortId: true },
-  });
+  const [post] = await db
+    .update(cohortPost)
+    .set({ pinned, updatedAt: new Date() })
+    .where(eq(cohortPost.id, id))
+    .returning({ cohortId: cohortPost.cohortId });
   revalidatePath(`/cohorts/${post.cohortId}`);
 }
 
@@ -319,9 +332,12 @@ export async function updateProjectGallery(formData: FormData): Promise<void> {
   // Editable by: team members, or admin/instructor.
   const isMod = me.role === "admin" || me.role === "instructor";
   if (!isMod) {
-    const member = await prisma.teamMember.findFirst({
-      where: { userId: me.id, teamId: parsed.data.teamId },
-      select: { id: true },
+    const member = await db.query.teamMember.findFirst({
+      where: and(
+        eq(teamMember.userId, me.id),
+        eq(teamMember.teamId, parsed.data.teamId),
+      ),
+      columns: { id: true },
     });
     if (!member) throw new Error("Only team members can edit this project.");
   }
@@ -332,16 +348,17 @@ export async function updateProjectGallery(formData: FormData): Promise<void> {
     .filter((t) => t.length > 0 && t.length <= 32)
     .slice(0, 16);
 
-  await prisma.team.update({
-    where: { id: parsed.data.teamId },
-    data: {
+  await db
+    .update(team)
+    .set({
       story: parsed.data.story || null,
       architecture: parsed.data.architecture || null,
       tags: Array.from(new Set(tags)),
       status: parsed.data.status,
       cohortId: parsed.data.cohortId || null,
-    },
-  });
+      updatedAt: new Date(),
+    })
+    .where(eq(team.id, parsed.data.teamId));
 
   revalidatePath(`/gallery/${parsed.data.teamId}`);
   revalidatePath("/gallery");
@@ -352,13 +369,14 @@ export async function adminFeatureProject(formData: FormData): Promise<void> {
   const teamId = String(formData.get("teamId") ?? "");
   const featured = formData.get("featured") === "on";
   if (!teamId) throw new Error("Missing team id");
-  await prisma.team.update({
-    where: { id: teamId },
-    data: {
+  await db
+    .update(team)
+    .set({
       featured,
       featuredAt: featured ? new Date() : null,
-    },
-  });
+      updatedAt: new Date(),
+    })
+    .where(eq(team.id, teamId));
   revalidatePath("/gallery");
   revalidatePath(`/gallery/${teamId}`);
   revalidatePath("/admin/gallery");
@@ -395,22 +413,24 @@ export async function addBuildLogEntry(formData: FormData): Promise<void> {
 
   const isMod = me.role === "admin" || me.role === "instructor";
   if (!isMod) {
-    const member = await prisma.teamMember.findFirst({
-      where: { userId: me.id, teamId: parsed.data.teamId },
-      select: { id: true },
+    const member = await db.query.teamMember.findFirst({
+      where: and(
+        eq(teamMember.userId, me.id),
+        eq(teamMember.teamId, parsed.data.teamId),
+      ),
+      columns: { id: true },
     });
     if (!member) {
       throw new Error("Only team members can post to this build log.");
     }
   }
 
-  await prisma.buildLogEntry.create({
-    data: {
-      teamId: parsed.data.teamId,
-      authorId: me.id,
-      body: parsed.data.body.trim(),
-      wokwiUrl: parsed.data.wokwiUrl || null,
-    },
+  await db.insert(buildLogEntry).values({
+    id: createId(),
+    teamId: parsed.data.teamId,
+    authorId: me.id,
+    body: parsed.data.body.trim(),
+    wokwiUrl: parsed.data.wokwiUrl || null,
   });
   revalidatePath(`/gallery/${parsed.data.teamId}`);
 }
@@ -419,9 +439,9 @@ export async function removeBuildLogEntry(formData: FormData): Promise<void> {
   const me = await requireUser();
   const id = String(formData.get("id") ?? "");
   if (!id) throw new Error("Missing id");
-  const entry = await prisma.buildLogEntry.findUnique({
-    where: { id },
-    select: { authorId: true, teamId: true },
+  const entry = await db.query.buildLogEntry.findFirst({
+    where: eq(buildLogEntry.id, id),
+    columns: { authorId: true, teamId: true },
   });
   if (!entry) throw new Error("Entry not found");
 
@@ -430,7 +450,7 @@ export async function removeBuildLogEntry(formData: FormData): Promise<void> {
     throw new Error("Not allowed");
   }
 
-  await prisma.buildLogEntry.delete({ where: { id } });
+  await db.delete(buildLogEntry).where(eq(buildLogEntry.id, id));
   revalidatePath(`/gallery/${entry.teamId}`);
 }
 
@@ -453,51 +473,55 @@ export async function adminAwardBadge(formData: FormData): Promise<void> {
   });
   if (!parsed.success) throw new Error("Invalid input");
 
-  const badge = await prisma.badge.findUnique({
-    where: { slug: parsed.data.badgeSlug },
-    select: { id: true, cohortId: true },
+  const badgeRow = await db.query.badge.findFirst({
+    where: eq(badge.slug, parsed.data.badgeSlug),
+    columns: { id: true, cohortId: true },
   });
-  if (!badge) throw new Error("Unknown badge");
+  if (!badgeRow) throw new Error("Unknown badge");
 
   // If the badge is scoped to a specific workshop, only admins or the
   // teachers of THAT workshop can award it. Admins bypass; instructors must
   // be members of the cohort (primary FK or UserCohort secondary).
-  if (badge.cohortId && me.role !== "admin") {
-    const inCohort = await prisma.user.findFirst({
-      where: {
-        id: me.id,
-        OR: [
-          { cohortId: badge.cohortId },
-          { workshops: { some: { cohortId: badge.cohortId } } },
-        ],
-      },
-      select: { id: true },
+  if (badgeRow.cohortId && me.role !== "admin") {
+    const badgeCohortId = badgeRow.cohortId;
+    // Primary FK membership: User.cohortId === badge.cohortId
+    const primary = await db.query.user.findFirst({
+      where: and(eq(user.id, me.id), eq(user.cohortId, badgeCohortId)),
+      columns: { id: true },
     });
-    if (!inCohort) {
+    // Secondary membership via the UserCohort join.
+    const secondary = primary
+      ? undefined
+      : await db.query.userCohort.findFirst({
+          where: and(
+            eq(userCohort.userId, me.id),
+            eq(userCohort.cohortId, badgeCohortId),
+          ),
+          columns: { id: true },
+        });
+    if (!primary && !secondary) {
       throw new Error(
         "You can only award this badge in the workshop it belongs to.",
       );
     }
   }
 
-  await prisma.earnedBadge.upsert({
-    where: {
-      userId_badgeId: {
-        userId: parsed.data.userId,
-        badgeId: badge.id,
-      },
-    },
-    create: {
+  await db
+    .insert(earnedBadge)
+    .values({
+      id: createId(),
       userId: parsed.data.userId,
-      badgeId: badge.id,
+      badgeId: badgeRow.id,
       note: parsed.data.note || null,
       awardedById: me.id,
-    },
-    update: {
-      note: parsed.data.note || null,
-      awardedById: me.id,
-    },
-  });
+    })
+    .onConflictDoUpdate({
+      target: [earnedBadge.userId, earnedBadge.badgeId],
+      set: {
+        note: parsed.data.note || null,
+        awardedById: me.id,
+      },
+    });
 
   revalidatePath("/builders");
   revalidatePath("/admin/badges");
@@ -507,7 +531,7 @@ export async function adminRevokeBadge(formData: FormData): Promise<void> {
   await requireRole(["admin", "instructor"]);
   const id = String(formData.get("id") ?? "");
   if (!id) throw new Error("Missing id");
-  await prisma.earnedBadge.delete({ where: { id } });
+  await db.delete(earnedBadge).where(eq(earnedBadge.id, id));
   revalidatePath("/builders");
   revalidatePath("/admin/badges");
 }
@@ -550,17 +574,16 @@ export async function createWorkshopBadge(
     throw new Error(parsed.error.issues[0]?.message ?? "Invalid input");
   }
 
-  await prisma.badge.create({
-    data: {
-      slug: parsed.data.slug,
-      name: parsed.data.name,
-      description: parsed.data.description,
-      criteria: parsed.data.description, // workshop badges: criteria == description
-      icon: parsed.data.icon,
-      tone: parsed.data.tone,
-      category: "workshop",
-      cohortId: parsed.data.cohortId,
-    },
+  await db.insert(badge).values({
+    id: createId(),
+    slug: parsed.data.slug,
+    name: parsed.data.name,
+    description: parsed.data.description,
+    criteria: parsed.data.description, // workshop badges: criteria == description
+    icon: parsed.data.icon,
+    tone: parsed.data.tone,
+    category: "workshop",
+    cohortId: parsed.data.cohortId,
   });
 
   revalidatePath(`/admin/cohorts/${parsed.data.cohortId}`);
@@ -574,7 +597,7 @@ export async function deleteWorkshopBadge(
   const id = String(formData.get("id") ?? "");
   const cohortId = String(formData.get("cohortId") ?? "");
   if (!id) throw new Error("Missing id");
-  await prisma.badge.delete({ where: { id } });
+  await db.delete(badge).where(eq(badge.id, id));
   revalidatePath(`/admin/cohorts/${cohortId}`);
   revalidatePath("/admin/badges");
 }
@@ -605,16 +628,16 @@ export async function addUserToWorkshop(
   });
   if (!parsed.success) throw new Error("Invalid input");
 
-  await prisma.userCohort.upsert({
-    where: {
-      userId_cohortId: {
-        userId: parsed.data.userId,
-        cohortId: parsed.data.cohortId,
-      },
-    },
-    create: { userId: parsed.data.userId, cohortId: parsed.data.cohortId },
-    update: {},
-  });
+  await db
+    .insert(userCohort)
+    .values({
+      id: createId(),
+      userId: parsed.data.userId,
+      cohortId: parsed.data.cohortId,
+    })
+    .onConflictDoNothing({
+      target: [userCohort.userId, userCohort.cohortId],
+    });
 
   revalidatePath(`/admin/cohorts/${parsed.data.cohortId}`);
   revalidatePath(`/cohorts/${parsed.data.cohortId}`);
@@ -640,37 +663,40 @@ const selfWorkshopSchema = z.object({
  * treats this workshop as their main one.
  */
 export async function joinWorkshop(formData: FormData): Promise<void> {
-  const user = await requireUser();
+  const currentUser = await requireUser();
   const parsed = selfWorkshopSchema.safeParse({
     cohortId: formData.get("cohortId"),
   });
   if (!parsed.success) throw new Error("Invalid input");
 
-  const cohort = await prisma.cohort.findUnique({
-    where: { id: parsed.data.cohortId },
-    select: { id: true },
+  const cohortRow = await db.query.cohort.findFirst({
+    where: eq(cohort.id, parsed.data.cohortId),
+    columns: { id: true },
   });
-  if (!cohort) throw new Error("Workshop not found");
+  if (!cohortRow) throw new Error("Workshop not found");
 
-  await prisma.userCohort.upsert({
-    where: {
-      userId_cohortId: { userId: user.id, cohortId: parsed.data.cohortId },
-    },
-    create: { userId: user.id, cohortId: parsed.data.cohortId },
-    update: {},
-  });
+  await db
+    .insert(userCohort)
+    .values({
+      id: createId(),
+      userId: currentUser.id,
+      cohortId: parsed.data.cohortId,
+    })
+    .onConflictDoNothing({
+      target: [userCohort.userId, userCohort.cohortId],
+    });
 
   // If they had no primary workshop, set this one as primary so the rest
   // of the platform (dashboard, hackathon, etc.) treats it as default.
-  const me = await prisma.user.findUnique({
-    where: { id: user.id },
-    select: { cohortId: true },
+  const me = await db.query.user.findFirst({
+    where: eq(user.id, currentUser.id),
+    columns: { cohortId: true },
   });
   if (!me?.cohortId) {
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { cohortId: parsed.data.cohortId },
-    });
+    await db
+      .update(user)
+      .set({ cohortId: parsed.data.cohortId })
+      .where(eq(user.id, currentUser.id));
   }
 
   revalidatePath(`/cohorts/${parsed.data.cohortId}`);
@@ -686,21 +712,20 @@ export async function joinWorkshop(formData: FormData): Promise<void> {
  * row goes away but their primary stays so they're not orphaned mid-session.
  */
 export async function leaveWorkshop(formData: FormData): Promise<void> {
-  const user = await requireUser();
+  const currentUser = await requireUser();
   const parsed = selfWorkshopSchema.safeParse({
     cohortId: formData.get("cohortId"),
   });
   if (!parsed.success) throw new Error("Invalid input");
 
-  await prisma.userCohort
-    .delete({
-      where: {
-        userId_cohortId: {
-          userId: user.id,
-          cohortId: parsed.data.cohortId,
-        },
-      },
-    })
+  await db
+    .delete(userCohort)
+    .where(
+      and(
+        eq(userCohort.userId, currentUser.id),
+        eq(userCohort.cohortId, parsed.data.cohortId),
+      ),
+    )
     .catch(() => {});
 
   revalidatePath(`/cohorts/${parsed.data.cohortId}`);
@@ -724,15 +749,14 @@ export async function removeUserFromWorkshop(
   });
   if (!parsed.success) throw new Error("Invalid input");
 
-  await prisma.userCohort
-    .delete({
-      where: {
-        userId_cohortId: {
-          userId: parsed.data.userId,
-          cohortId: parsed.data.cohortId,
-        },
-      },
-    })
+  await db
+    .delete(userCohort)
+    .where(
+      and(
+        eq(userCohort.userId, parsed.data.userId),
+        eq(userCohort.cohortId, parsed.data.cohortId),
+      ),
+    )
     .catch(() => {});
 
   revalidatePath(`/admin/cohorts/${parsed.data.cohortId}`);

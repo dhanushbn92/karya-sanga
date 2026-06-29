@@ -1,18 +1,17 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { db, hackathonConfig } from "@/lib/db";
 import { UploadPostForm } from "@/components/wall/upload-post-form";
 
 export const metadata = { title: "New post · Karya Sanga" };
 
 export default async function NewWallPostPage() {
   const user = await requireUser();
-  const config = await prisma.hackathonConfig.upsert({
-    where: { id: "default" },
-    create: { id: "default" },
-    update: {},
-    select: { wallRequireApproval: true },
-  });
+  const [config] = await db
+    .insert(hackathonConfig)
+    .values({ id: "default", updatedAt: new Date() })
+    .onConflictDoUpdate({ target: hackathonConfig.id, set: {} })
+    .returning({ wallRequireApproval: hackathonConfig.wallRequireApproval });
 
   return (
     <main className="mx-auto w-full max-w-[1100px] flex-1 px-4 md:px-12 py-12">

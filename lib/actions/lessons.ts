@@ -2,7 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { prisma } from "@/lib/prisma";
+import { and, eq } from "drizzle-orm";
+import { createId } from "@paralleldrive/cuid2";
+import { db, lesson, progress } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 
 /**
@@ -23,30 +25,33 @@ export async function markLessonComplete(formData: FormData) {
   }
 
   // Verify the lesson exists and is published.
-  const lesson = await prisma.lesson.findFirst({
-    where: { id: parsed.data.lessonId, published: true },
-    select: { id: true },
+  const found = await db.query.lesson.findFirst({
+    where: and(eq(lesson.id, parsed.data.lessonId), eq(lesson.published, true)),
+    columns: { id: true },
   });
-  if (!lesson) return { ok: false as const, error: "Lesson not found" };
+  if (!found) return { ok: false as const, error: "Lesson not found" };
 
-  await prisma.progress.upsert({
-    where: {
-      userId_lessonId: { userId: user.id, lessonId: lesson.id },
-    },
-    create: {
+  await db
+    .insert(progress)
+    .values({
+      id: createId(),
       userId: user.id,
-      lessonId: lesson.id,
+      lessonId: found.id,
       completed: true,
       completedAt: new Date(),
-    },
-    update: {
-      completed: true,
-      completedAt: new Date(),
-    },
-  });
+      updatedAt: new Date(),
+    })
+    .onConflictDoUpdate({
+      target: [progress.userId, progress.lessonId],
+      set: {
+        completed: true,
+        completedAt: new Date(),
+        updatedAt: new Date(),
+      },
+    });
 
   revalidatePath("/lessons");
-  revalidatePath(`/lessons/${lesson.id}`);
+  revalidatePath(`/lessons/${found.id}`);
   return { ok: true as const };
 }
 
@@ -57,12 +62,14 @@ export async function unmarkLessonComplete(formData: FormData) {
   });
   if (!parsed.success) return { ok: false as const, error: "Invalid lesson" };
 
-  await prisma.progress
-    .delete({
-      where: {
-        userId_lessonId: { userId: user.id, lessonId: parsed.data.lessonId },
-      },
-    })
+  await db
+    .delete(progress)
+    .where(
+      and(
+        eq(progress.userId, user.id),
+        eq(progress.lessonId, parsed.data.lessonId),
+      ),
+    )
     .catch(() => {
       /* no row to delete is fine */
     });

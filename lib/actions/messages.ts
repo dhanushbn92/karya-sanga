@@ -3,7 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { prisma } from "@/lib/prisma";
+import { and, eq, isNull, ne } from "drizzle-orm";
+import { createId } from "@paralleldrive/cuid2";
+import { db, user, conversation, directMessage } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 
 /**
@@ -54,9 +56,9 @@ export async function sendDirectMessage(formData: FormData): Promise<void> {
   }
 
   // Confirm the recipient actually exists — prevents random UUID spam.
-  const recipient = await prisma.user.findUnique({
-    where: { id: parsed.data.toUserId },
-    select: { id: true },
+  const recipient = await db.query.user.findFirst({
+    where: eq(user.id, parsed.data.toUserId),
+    columns: { id: true },
   });
   if (!recipient) throw new Error("Recipient not found");
 
@@ -64,31 +66,30 @@ export async function sendDirectMessage(formData: FormData): Promise<void> {
   const now = new Date();
 
   // Upsert the dyad → insert the message in one transaction.
-  const conversation = await prisma.conversation.upsert({
-    where: { userAId_userBId: { userAId, userBId } },
-    create: {
-      userAId,
-      userBId,
-      lastMessageAt: now,
-      messages: {
-        create: {
-          authorId: me.id,
-          body: parsed.data.body.trim(),
-          createdAt: now,
-        },
-      },
-    },
-    update: {
-      lastMessageAt: now,
-      messages: {
-        create: {
-          authorId: me.id,
-          body: parsed.data.body.trim(),
-          createdAt: now,
-        },
-      },
-    },
-    select: { id: true },
+  const conversationId = await db.transaction(async (tx) => {
+    const [convo] = await tx
+      .insert(conversation)
+      .values({
+        id: createId(),
+        userAid: userAId,
+        userBid: userBId,
+        lastMessageAt: now,
+      })
+      .onConflictDoUpdate({
+        target: [conversation.userAid, conversation.userBid],
+        set: { lastMessageAt: now },
+      })
+      .returning({ id: conversation.id });
+
+    await tx.insert(directMessage).values({
+      id: createId(),
+      conversationId: convo.id,
+      authorId: me.id,
+      body: parsed.data.body.trim(),
+      createdAt: now,
+    });
+
+    return convo.id;
   });
 
   revalidatePath("/messages");
@@ -98,7 +99,7 @@ export async function sendDirectMessage(formData: FormData): Promise<void> {
   // navigate back.
 
   // Redirect the sender into the thread so they see what they sent.
-  redirect(`/messages/${parsed.data.toUserId}#m-${conversation.id}`);
+  redirect(`/messages/${parsed.data.toUserId}#m-${conversationId}`);
 }
 
 /**
@@ -109,14 +110,16 @@ export async function markConversationRead(
   conversationId: string,
 ): Promise<void> {
   const me = await requireUser();
-  await prisma.directMessage.updateMany({
-    where: {
-      conversationId,
-      readAt: null,
-      NOT: { authorId: me.id },
-    },
-    data: { readAt: new Date() },
-  });
+  await db
+    .update(directMessage)
+    .set({ readAt: new Date() })
+    .where(
+      and(
+        eq(directMessage.conversationId, conversationId),
+        isNull(directMessage.readAt),
+        ne(directMessage.authorId, me.id),
+      ),
+    );
   revalidatePath("/messages");
   revalidatePath(`/messages/${conversationId}`);
 }

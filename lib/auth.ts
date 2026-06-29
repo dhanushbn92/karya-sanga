@@ -1,9 +1,11 @@
 import "server-only";
 import { cache } from "react";
 import { redirect } from "next/navigation";
-import { Role } from "../generated/prisma/client";
+import { eq } from "drizzle-orm";
+import { db, user, role } from "@/lib/db";
 import { createClient } from "@/lib/supabase/server";
-import { prisma } from "@/lib/prisma";
+
+export type Role = (typeof role.enumValues)[number];
 
 export type CurrentUser = {
   id: string;
@@ -20,7 +22,7 @@ export type CurrentUser = {
  * know "who is logged in" — TopNav for role-aware menu items, the page for
  * `requireUser` / `requireRole` gating. Without memoization, each of those
  * triggers (a) a Supabase Auth API call to validate the JWT and (b) a
- * Prisma query to load the User row. With our Supabase project in Sydney
+ * database query to load the User row. With our Supabase project in Sydney
  * and most users in India, every round trip costs ~120ms — so a single
  * page load was paying ~500-800ms in wasted auth/DB roundtrips before this.
  *
@@ -41,11 +43,11 @@ export const getCurrentUser = cache(
       return null;
     }
     if (!authUser) return null;
-    const user = authUser;
+    const authedUser = authUser;
 
-    const row = await prisma.user.findUnique({
-      where: { id: user.id },
-      select: {
+    const row = await db.query.user.findFirst({
+      where: eq(user.id, authedUser.id),
+      columns: {
         id: true,
         email: true,
         name: true,
@@ -58,27 +60,27 @@ export const getCurrentUser = cache(
 
     // Trigger may have failed or not been applied yet — fall back to a safe
     // upsert so the app stays usable. Defaults to `participant`.
-    return prisma.user.upsert({
-      where: { id: user.id },
-      create: {
-        id: user.id,
-        email: user.email ?? "",
+    const [created] = await db
+      .insert(user)
+      .values({
+        id: authedUser.id,
+        email: authedUser.email ?? "",
         name:
-          (user.user_metadata?.full_name as string | undefined) ??
-          (user.user_metadata?.name as string | undefined) ??
+          (authedUser.user_metadata?.full_name as string | undefined) ??
+          (authedUser.user_metadata?.name as string | undefined) ??
           null,
         avatarUrl:
-          (user.user_metadata?.avatar_url as string | undefined) ?? null,
-      },
-      update: {},
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        avatarUrl: true,
-      },
-    });
+          (authedUser.user_metadata?.avatar_url as string | undefined) ?? null,
+      })
+      .onConflictDoUpdate({ target: user.id, set: {} })
+      .returning({
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        avatarUrl: user.avatarUrl,
+      });
+    return created;
   },
 );
 

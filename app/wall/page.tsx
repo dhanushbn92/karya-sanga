@@ -1,6 +1,7 @@
 import Link from "next/link";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { requireUser } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { db, wallPost } from "@/lib/db";
 import { signedWallImageUrls } from "@/lib/supabase/admin";
 import { deleteWallPost } from "@/lib/actions/wall";
 import { ReactionBar } from "@/components/wall/reaction-bar";
@@ -46,50 +47,60 @@ export default async function WallPage({
     kind === "photo" || kind === "update" || kind === "blog" ? kind : "all";
 
   // Build feed filter
-  const feedWhere: {
-    approved: boolean;
-    authorId?: string;
-    tags?: { has: string };
-    kind?: "photo" | "update" | "blog";
-  } = { approved: true };
-  if (mode === "mine") feedWhere.authorId = user.id;
-  if (tag) feedWhere.tags = { has: tag.toLowerCase() };
-  if (kindFilter !== "all") feedWhere.kind = kindFilter;
+  const feedConditions = [eq(wallPost.approved, true)];
+  if (mode === "mine") feedConditions.push(eq(wallPost.authorId, user.id));
+  if (tag)
+    feedConditions.push(
+      sql`${wallPost.tags} @> ARRAY[${tag.toLowerCase()}]::text[]`,
+    );
+  if (kindFilter !== "all")
+    feedConditions.push(eq(wallPost.kind, kindFilter));
 
-  const [approvedPosts, myPending, totalCount, myCount, allTagsRaw] =
+  const [approvedPostsRaw, myPending, totalCount, myCount, allTagsRaw] =
     await Promise.all([
-      prisma.wallPost.findMany({
-        where: feedWhere,
-        orderBy: { createdAt: "desc" },
-        take: 60,
-        include: {
-          author: { select: { id: true, name: true, email: true } },
-          reactions: { select: { type: true, userId: true } },
+      db.query.wallPost.findMany({
+        where: and(...feedConditions),
+        orderBy: [desc(wallPost.createdAt)],
+        limit: 60,
+        with: {
+          user_authorId: { columns: { id: true, name: true, email: true } },
+          reactions: { columns: { type: true, userId: true } },
           comments: {
-            orderBy: { createdAt: "asc" },
-            include: {
-              author: { select: { id: true, name: true, email: true } },
+            orderBy: (c, { asc }) => [asc(c.createdAt)],
+            with: {
+              user: { columns: { id: true, name: true, email: true } },
             },
           },
         },
       }),
-      prisma.wallPost.findMany({
-        where: { authorId: user.id, approved: false },
-        orderBy: { createdAt: "desc" },
-        take: 6,
+      db.query.wallPost.findMany({
+        where: and(eq(wallPost.authorId, user.id), eq(wallPost.approved, false)),
+        orderBy: [desc(wallPost.createdAt)],
+        limit: 6,
       }),
-      prisma.wallPost.count({ where: { approved: true } }),
-      prisma.wallPost.count({
-        where: { approved: true, authorId: user.id },
-      }),
+      db.$count(wallPost, eq(wallPost.approved, true)),
+      db.$count(
+        wallPost,
+        and(eq(wallPost.approved, true), eq(wallPost.authorId, user.id)),
+      ),
       // Cheap distinct-tag sampling — pull recent posts' tags, dedupe in JS.
-      prisma.wallPost.findMany({
-        where: { approved: true },
-        orderBy: { createdAt: "desc" },
-        take: 100,
-        select: { tags: true },
+      db.query.wallPost.findMany({
+        where: eq(wallPost.approved, true),
+        orderBy: [desc(wallPost.createdAt)],
+        limit: 100,
+        columns: { tags: true },
       }),
     ]);
+
+  // Map Drizzle relation names back to the keys the JSX expects
+  // (user_authorId → author, comment.user → comment.author).
+  const approvedPosts = approvedPostsRaw.map((p) => ({
+    ...p,
+    tags: p.tags ?? [],
+    mediaUrls: p.mediaUrls ?? [],
+    author: p.user_authorId,
+    comments: p.comments.map((c) => ({ ...c, author: c.user })),
+  }));
 
   // Image paths only — nullable for update / cover-less blog rows.
   const allPaths = [
@@ -101,7 +112,7 @@ export default async function WallPage({
   // Distinct tag set across recent posts
   const tagCounts = new Map<string, number>();
   for (const p of allTagsRaw) {
-    for (const t of p.tags) {
+    for (const t of p.tags ?? []) {
       tagCounts.set(t, (tagCounts.get(t) ?? 0) + 1);
     }
   }

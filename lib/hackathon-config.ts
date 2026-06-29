@@ -1,5 +1,6 @@
 import "server-only";
-import { prisma } from "@/lib/prisma";
+import { eq } from "drizzle-orm";
+import { db, hackathonConfig } from "@/lib/db";
 
 /**
  * Resolve the hackathon config for a given workshop, with fallback.
@@ -15,14 +16,18 @@ import { prisma } from "@/lib/prisma";
  */
 export async function getHackathonConfig(cohortId: string | null) {
   if (cohortId) {
-    const own = await prisma.hackathonConfig.findUnique({
-      where: { cohortId },
+    const own = await db.query.hackathonConfig.findFirst({
+      where: eq(hackathonConfig.cohortId, cohortId),
     });
     if (own) return own;
   }
-  return prisma.hackathonConfig.upsert({
-    where: { id: "default" },
-    create: { id: "default" },
-    update: {},
-  });
+  const [cfg] = await db
+    .insert(hackathonConfig)
+    .values({ id: "default", updatedAt: new Date() })
+    .onConflictDoUpdate({
+      target: hackathonConfig.id,
+      set: { id: "default" },
+    })
+    .returning();
+  return cfg;
 }

@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { eq } from "drizzle-orm";
 import { requireUser } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { db, team } from "@/lib/db";
 import { LessonBody } from "@/components/lessons/lesson-body";
 import { MediaEmbed } from "@/components/gallery/media-embed";
 import { ShareButton } from "@/components/gallery/share-button";
@@ -47,14 +48,14 @@ export default async function ProjectPage({
   const me = await requireUser();
   const { id } = await params;
 
-  const project = await prisma.team.findUnique({
-    where: { id },
-    include: {
-      cohort: { select: { id: true, name: true } },
-      members: {
-        include: {
+  const projectRaw = await db.query.team.findFirst({
+    where: eq(team.id, id),
+    with: {
+      cohort: { columns: { id: true, name: true } },
+      teamMembers: {
+        with: {
           user: {
-            select: {
+            columns: {
               id: true,
               name: true,
               email: true,
@@ -63,26 +64,44 @@ export default async function ProjectPage({
           },
         },
       },
-      wokwiLinks: { orderBy: { createdAt: "desc" } },
+      teamWokwiLinks: { orderBy: (l, { desc }) => [desc(l.createdAt)] },
       buildLogEntries: {
-        include: {
-          author: { select: { id: true, name: true, email: true } },
+        with: {
+          user: { columns: { id: true, name: true, email: true } },
         },
-        orderBy: { createdAt: "desc" },
+        orderBy: (e, { desc }) => [desc(e.createdAt)],
       },
-      submission: true,
-      reactions: { select: { type: true, userId: true } },
-      comments: {
-        orderBy: { createdAt: "asc" },
-        include: {
-          author: {
-            select: { id: true, name: true, email: true, handle: true },
+      submissions: true,
+      projectReactions: { columns: { type: true, userId: true } },
+      projectComments: {
+        orderBy: (c, { asc }) => [asc(c.createdAt)],
+        with: {
+          user: {
+            columns: { id: true, name: true, email: true, handle: true },
           },
         },
       },
     },
   });
-  if (!project) notFound();
+  if (!projectRaw) notFound();
+
+  // Map Drizzle relation names back to the keys the JSX expects.
+  // submissions is a many-relation in Drizzle but one-to-one in practice
+  // (unique teamId), so collapse to the single row (or undefined).
+  const project = {
+    ...projectRaw,
+    tags: projectRaw.tags ?? [],
+    mediaUrls: projectRaw.mediaUrls ?? [],
+    members: projectRaw.teamMembers.map((m) => ({ ...m, user: m.user })),
+    wokwiLinks: projectRaw.teamWokwiLinks,
+    buildLogEntries: projectRaw.buildLogEntries.map((e) => ({
+      ...e,
+      author: e.user,
+    })),
+    submission: projectRaw.submissions[0] ?? null,
+    reactions: projectRaw.projectReactions,
+    comments: projectRaw.projectComments.map((c) => ({ ...c, author: c.user })),
+  };
 
   // Reactions: counts + which ones I have
   const reactionCounts: Record<"clap" | "love" | "idea", number> = {

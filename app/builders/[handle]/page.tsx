@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { and, desc, eq } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { db, user, progress, wallPost } from "@/lib/db";
 import { MessageButton } from "@/components/ui/message-button";
 
 export const metadata = { title: "Builder · Karya Sanga" };
@@ -35,18 +36,18 @@ export default async function BuilderPage({
   const me = await getCurrentUser();
   const { handle } = await params;
 
-  const builder = await prisma.user.findUnique({
-    where: { handle },
-    include: {
-      cohort: { select: { id: true, name: true } },
-      earnedBadges: {
-        include: { badge: true },
-        orderBy: { earnedAt: "desc" },
+  const builderRaw = await db.query.user.findFirst({
+    where: eq(user.handle, handle),
+    with: {
+      cohort: { columns: { id: true, name: true } },
+      earnedBadges_userId: {
+        with: { badge: true },
+        orderBy: (eb, { desc }) => [desc(eb.earnedAt)],
       },
-      teamMembership: {
-        include: {
+      teamMembers: {
+        with: {
           team: {
-            select: {
+            columns: {
               id: true,
               name: true,
               projectTitle: true,
@@ -54,14 +55,36 @@ export default async function BuilderPage({
               status: true,
               featured: true,
               tags: true,
-              _count: { select: { buildLogEntries: true } },
+            },
+            with: {
+              buildLogEntries: { columns: { id: true } },
             },
           },
         },
       },
     },
   });
-  if (!builder) notFound();
+  if (!builderRaw) notFound();
+
+  // Map Drizzle relation names back to the keys the JSX expects.
+  // teamMembers is a many-relation in Drizzle but one-to-one in practice
+  // (unique userId), so collapse to the single membership (or null), and
+  // rebuild team._count.buildLogEntries from the fetched rows.
+  const membershipRaw = builderRaw.teamMembers[0] ?? null;
+  const builder = {
+    ...builderRaw,
+    earnedBadges: builderRaw.earnedBadges_userId,
+    teamMembership: membershipRaw
+      ? {
+          ...membershipRaw,
+          team: {
+            ...membershipRaw.team,
+            tags: membershipRaw.team.tags ?? [],
+            _count: { buildLogEntries: membershipRaw.team.buildLogEntries.length },
+          },
+        }
+      : null,
+  };
 
   const isSelf = !!me && builder.id === me.id;
   const isMod = !!me && (me.role === "admin" || me.role === "instructor");
@@ -73,18 +96,23 @@ export default async function BuilderPage({
   if (!builder.profilePublic && !me) notFound();
 
   // Extra activity stats — parallel queries
-  const [lessonsDone, wallPostsCount, recentWallPosts] = await Promise.all([
-    prisma.progress.count({
-      where: { userId: builder.id, completed: true },
-    }),
-    prisma.wallPost.count({
-      where: { authorId: builder.id, approved: true },
-    }),
-    prisma.wallPost.findMany({
-      where: { authorId: builder.id, approved: true },
-      orderBy: { createdAt: "desc" },
-      take: 5,
-      select: {
+  const [lessonsDone, wallPostsCount, recentWallPostsRaw] = await Promise.all([
+    db.$count(
+      progress,
+      and(eq(progress.userId, builder.id), eq(progress.completed, true)),
+    ),
+    db.$count(
+      wallPost,
+      and(eq(wallPost.authorId, builder.id), eq(wallPost.approved, true)),
+    ),
+    db.query.wallPost.findMany({
+      where: and(
+        eq(wallPost.authorId, builder.id),
+        eq(wallPost.approved, true),
+      ),
+      orderBy: [desc(wallPost.createdAt)],
+      limit: 5,
+      columns: {
         id: true,
         kind: true,
         title: true,
@@ -95,6 +123,12 @@ export default async function BuilderPage({
       },
     }),
   ]);
+
+  // tags is a nullable array column in the schema; the JSX reads .tags.length.
+  const recentWallPosts = recentWallPostsRaw.map((p) => ({
+    ...p,
+    tags: p.tags ?? [],
+  }));
 
   const workshopBadges = builder.earnedBadges.filter(
     (b) => b.badge.category === "workshop",

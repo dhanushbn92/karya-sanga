@@ -2,7 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { prisma } from "@/lib/prisma";
+import { and, eq, or } from "drizzle-orm";
+import { createId } from "@paralleldrive/cuid2";
+import { db, hackathonConfig, wallPost, reaction, comment } from "@/lib/db";
 import { requireRole, requireUser } from "@/lib/auth";
 import { deleteWallImage } from "@/lib/supabase/admin";
 import type { ReactionType } from "../../generated/prisma/client";
@@ -23,12 +25,12 @@ import type { ReactionType } from "../../generated/prisma/client";
  */
 
 async function getWallConfig() {
-  return prisma.hackathonConfig.upsert({
-    where: { id: "default" },
-    create: { id: "default" },
-    update: {},
-    select: { wallRequireApproval: true },
-  });
+  const [row] = await db
+    .insert(hackathonConfig)
+    .values({ id: "default", updatedAt: new Date() })
+    .onConflictDoUpdate({ target: hackathonConfig.id, set: {} })
+    .returning({ wallRequireApproval: hackathonConfig.wallRequireApproval });
+  return row;
 }
 
 /**
@@ -148,19 +150,19 @@ export async function createWallPost(formData: FormData): Promise<void> {
     ),
   ).slice(0, 8);
 
-  await prisma.wallPost.create({
-    data: {
-      authorId: user.id,
-      kind: parsed.data.kind,
-      imagePath: parsed.data.imagePath || null,
-      caption: parsed.data.caption || null,
-      title: parsed.data.title?.trim() || null,
-      body: parsed.data.body?.trim() || null,
-      tags: Array.from(new Set(tags)),
-      mediaUrls,
-      approved: autoApprove,
-      approvedAt: autoApprove ? new Date() : null,
-    },
+  await db.insert(wallPost).values({
+    id: createId(),
+    authorId: user.id,
+    kind: parsed.data.kind,
+    imagePath: parsed.data.imagePath || null,
+    caption: parsed.data.caption || null,
+    title: parsed.data.title?.trim() || null,
+    body: parsed.data.body?.trim() || null,
+    tags: Array.from(new Set(tags)),
+    mediaUrls,
+    approved: autoApprove,
+    approvedAt: autoApprove ? new Date() : null,
+    updatedAt: new Date(),
   });
 
   revalidatePath("/wall");
@@ -171,16 +173,17 @@ export async function approveWallPost(formData: FormData): Promise<void> {
   const mod = await requireRole(["admin", "instructor"]);
   const id = String(formData.get("id") ?? "");
   if (!id) throw new Error("Missing id");
-  await prisma.wallPost.update({
-    where: { id },
-    data: {
+  await db
+    .update(wallPost)
+    .set({
       approved: true,
       approvedAt: new Date(),
       approvedById: mod.id,
       rejected: false,
       rejectionReason: null,
-    },
-  });
+      updatedAt: new Date(),
+    })
+    .where(eq(wallPost.id, id));
   revalidatePath("/wall");
   revalidatePath("/admin/wall");
 }
@@ -199,14 +202,15 @@ export async function rejectWallPost(formData: FormData): Promise<void> {
   if (!parsed.success) {
     throw new Error(parsed.error.issues[0]?.message ?? "Invalid input");
   }
-  await prisma.wallPost.update({
-    where: { id: parsed.data.id },
-    data: {
+  await db
+    .update(wallPost)
+    .set({
       approved: false,
       rejected: true,
       rejectionReason: parsed.data.reason || null,
-    },
-  });
+      updatedAt: new Date(),
+    })
+    .where(eq(wallPost.id, parsed.data.id));
   revalidatePath("/wall");
   revalidatePath("/admin/wall");
 }
@@ -216,9 +220,9 @@ export async function deleteWallPost(formData: FormData): Promise<void> {
   const id = String(formData.get("id") ?? "");
   if (!id) throw new Error("Missing id");
 
-  const post = await prisma.wallPost.findUnique({
-    where: { id },
-    select: { authorId: true, imagePath: true },
+  const post = await db.query.wallPost.findFirst({
+    where: eq(wallPost.id, id),
+    columns: { authorId: true, imagePath: true },
   });
   if (!post) throw new Error("Post not found");
 
@@ -228,7 +232,7 @@ export async function deleteWallPost(formData: FormData): Promise<void> {
     throw new Error("Not allowed");
   }
 
-  await prisma.wallPost.delete({ where: { id } });
+  await db.delete(wallPost).where(eq(wallPost.id, id));
   // Best-effort cleanup of the underlying storage object (if any — updates
   // don't have one).
   if (post.imagePath) {
@@ -260,14 +264,20 @@ export async function updateWallConfig(formData: FormData): Promise<void> {
   });
   if (!parsed.success) throw new Error("Invalid config");
 
-  await prisma.hackathonConfig.upsert({
-    where: { id: "default" },
-    create: {
+  await db
+    .insert(hackathonConfig)
+    .values({
       id: "default",
       wallRequireApproval: parsed.data.wallRequireApproval,
-    },
-    update: { wallRequireApproval: parsed.data.wallRequireApproval },
-  });
+      updatedAt: new Date(),
+    })
+    .onConflictDoUpdate({
+      target: hackathonConfig.id,
+      set: {
+        wallRequireApproval: parsed.data.wallRequireApproval,
+        updatedAt: new Date(),
+      },
+    });
   revalidatePath("/admin/wall");
   revalidatePath("/wall");
 }
@@ -293,34 +303,32 @@ export async function toggleReaction(formData: FormData): Promise<void> {
   }
 
   // Only let people react to posts they can actually see (approved, or their own).
-  const post = await prisma.wallPost.findFirst({
-    where: {
-      id: parsed.data.postId,
-      OR: [{ approved: true }, { authorId: user.id }],
-    },
-    select: { id: true },
+  const post = await db.query.wallPost.findFirst({
+    where: and(
+      eq(wallPost.id, parsed.data.postId),
+      or(eq(wallPost.approved, true), eq(wallPost.authorId, user.id)),
+    ),
+    columns: { id: true },
   });
   if (!post) throw new Error("Post not found");
 
-  const existing = await prisma.reaction.findUnique({
-    where: {
-      postId_userId_type: {
-        postId: parsed.data.postId,
-        userId: user.id,
-        type: parsed.data.type as ReactionType,
-      },
-    },
+  const existing = await db.query.reaction.findFirst({
+    where: and(
+      eq(reaction.postId, parsed.data.postId),
+      eq(reaction.userId, user.id),
+      eq(reaction.type, parsed.data.type as ReactionType),
+    ),
+    columns: { id: true },
   });
 
   if (existing) {
-    await prisma.reaction.delete({ where: { id: existing.id } });
+    await db.delete(reaction).where(eq(reaction.id, existing.id));
   } else {
-    await prisma.reaction.create({
-      data: {
-        postId: parsed.data.postId,
-        userId: user.id,
-        type: parsed.data.type as ReactionType,
-      },
+    await db.insert(reaction).values({
+      id: createId(),
+      postId: parsed.data.postId,
+      userId: user.id,
+      type: parsed.data.type as ReactionType,
     });
   }
 
@@ -349,21 +357,21 @@ export async function addComment(formData: FormData): Promise<void> {
     throw new Error(parsed.error.issues[0]?.message ?? "Invalid comment");
   }
 
-  const post = await prisma.wallPost.findFirst({
-    where: {
-      id: parsed.data.postId,
-      OR: [{ approved: true }, { authorId: user.id }],
-    },
-    select: { id: true },
+  const post = await db.query.wallPost.findFirst({
+    where: and(
+      eq(wallPost.id, parsed.data.postId),
+      or(eq(wallPost.approved, true), eq(wallPost.authorId, user.id)),
+    ),
+    columns: { id: true },
   });
   if (!post) throw new Error("Post not found");
 
-  await prisma.comment.create({
-    data: {
-      postId: parsed.data.postId,
-      authorId: user.id,
-      body: parsed.data.body.trim(),
-    },
+  await db.insert(comment).values({
+    id: createId(),
+    postId: parsed.data.postId,
+    authorId: user.id,
+    body: parsed.data.body.trim(),
+    updatedAt: new Date(),
   });
 
   revalidatePath("/wall");
@@ -374,17 +382,17 @@ export async function deleteComment(formData: FormData): Promise<void> {
   const id = String(formData.get("id") ?? "");
   if (!id) throw new Error("Missing comment id");
 
-  const comment = await prisma.comment.findUnique({
-    where: { id },
-    select: { authorId: true },
+  const c = await db.query.comment.findFirst({
+    where: eq(comment.id, id),
+    columns: { authorId: true },
   });
-  if (!comment) throw new Error("Comment not found");
+  if (!c) throw new Error("Comment not found");
 
   const isMod = user.role === "admin" || user.role === "instructor";
-  if (!isMod && comment.authorId !== user.id) {
+  if (!isMod && c.authorId !== user.id) {
     throw new Error("Not allowed");
   }
 
-  await prisma.comment.delete({ where: { id } });
+  await db.delete(comment).where(eq(comment.id, id));
   revalidatePath("/wall");
 }

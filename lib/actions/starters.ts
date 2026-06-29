@@ -2,7 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { prisma } from "@/lib/prisma";
+import { eq } from "drizzle-orm";
+import { createId } from "@paralleldrive/cuid2";
+import { db, wokwiStarter } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
 import { STARTER_BOARDS as BOARDS } from "@/lib/starter-boards";
 
@@ -36,16 +38,16 @@ export async function createStarter(formData: FormData): Promise<void> {
   if (!parsed.success) {
     throw new Error(parsed.error.issues[0]?.message ?? "Invalid input");
   }
-  await prisma.wokwiStarter.create({
-    data: {
-      label: parsed.data.label,
-      description: parsed.data.description || null,
-      board: parsed.data.board,
-      category: parsed.data.category || null,
-      wokwiProjectUrl: parsed.data.wokwiProjectUrl,
-      order: parsed.data.order,
-      published: parsed.data.published,
-    },
+  await db.insert(wokwiStarter).values({
+    id: createId(),
+    label: parsed.data.label,
+    description: parsed.data.description || null,
+    board: parsed.data.board,
+    category: parsed.data.category || null,
+    wokwiProjectUrl: parsed.data.wokwiProjectUrl,
+    order: parsed.data.order,
+    published: parsed.data.published,
+    updatedAt: new Date(),
   });
   revalidatePath("/admin/simulator/starters");
   revalidatePath("/simulator");
@@ -69,14 +71,15 @@ export async function updateStarter(formData: FormData): Promise<void> {
     throw new Error(parsed.error.issues[0]?.message ?? "Invalid input");
   }
   const { id, ...rest } = parsed.data;
-  await prisma.wokwiStarter.update({
-    where: { id },
-    data: {
+  await db
+    .update(wokwiStarter)
+    .set({
       ...rest,
       description: rest.description || null,
       category: rest.category || null,
-    },
-  });
+      updatedAt: new Date(),
+    })
+    .where(eq(wokwiStarter.id, id));
   revalidatePath("/admin/simulator/starters");
   revalidatePath("/simulator");
 }
@@ -85,8 +88,7 @@ export async function deleteStarter(formData: FormData): Promise<void> {
   await requireRole(["admin", "instructor"]);
   const id = String(formData.get("id") ?? "");
   if (!id) throw new Error("Missing id");
-  await prisma.wokwiStarter.delete({ where: { id } });
+  await db.delete(wokwiStarter).where(eq(wokwiStarter.id, id));
   revalidatePath("/admin/simulator/starters");
   revalidatePath("/simulator");
 }
-

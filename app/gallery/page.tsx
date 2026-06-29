@@ -1,6 +1,7 @@
 import Link from "next/link";
+import { and, desc, eq, ilike, ne, or, sql } from "drizzle-orm";
 import { requireUser } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { db, cohort as cohortTable, team, teamMember, buildLogEntry } from "@/lib/db";
 
 export const metadata = { title: "Projects · Karya Sanga" };
 
@@ -43,76 +44,109 @@ export default async function GalleryPage({
   const activeStatus: StatusFilter | "all" =
     status === "active" || status === "shipped" ? status : "all";
 
-  const where: {
-    status?: { not?: "archived"; equals?: "active" | "shipped" };
-    cohortId?: string;
-    tags?: { has: string };
-    featured?: boolean;
-    OR?: Array<
-      | { name: { contains: string; mode: "insensitive" } }
-      | { projectTitle: { contains: string; mode: "insensitive" } }
-      | { projectDescription: { contains: string; mode: "insensitive" } }
-    >;
-  } = { status: { not: "archived" } };
-  if (cohort) where.cohortId = cohort;
-  if (tag) where.tags = { has: tag.toLowerCase() };
-  if (featured === "1") where.featured = true;
-  if (activeStatus === "active") where.status = { equals: "active" };
-  if (activeStatus === "shipped") where.status = { equals: "shipped" };
+  // Default: exclude archived. The status filter narrows further.
+  const conditions = [ne(team.status, "archived")];
+  if (cohort) conditions.push(eq(team.cohortId, cohort));
+  if (tag)
+    conditions.push(
+      sql`${team.tags} @> ARRAY[${tag.toLowerCase()}]::text[]`,
+    );
+  if (featured === "1") conditions.push(eq(team.featured, true));
+  if (activeStatus === "active") conditions.push(eq(team.status, "active"));
+  if (activeStatus === "shipped") conditions.push(eq(team.status, "shipped"));
   if (query) {
-    where.OR = [
-      { name: { contains: query, mode: "insensitive" } },
-      { projectTitle: { contains: query, mode: "insensitive" } },
-      { projectDescription: { contains: query, mode: "insensitive" } },
-    ];
+    const orClause = or(
+      ilike(team.name, `%${query}%`),
+      ilike(team.projectTitle, `%${query}%`),
+      ilike(team.projectDescription, `%${query}%`),
+    );
+    if (orClause) conditions.push(orClause);
   }
 
-  const [cohorts, projects, featuredOne, myTeamProject] = await Promise.all([
-    prisma.cohort.findMany({
-      orderBy: [{ current: "desc" }, { startedOn: "desc" }],
-      select: {
-        id: true,
-        name: true,
-        _count: { select: { projects: true } },
+  // Correlated count of build-log entries per team (replaces Prisma _count).
+  const buildLogCount = sql<number>`(
+    select count(*)::int from ${buildLogEntry}
+    where ${buildLogEntry.teamId} = ${team.id}
+  )`;
+
+  const [cohortsRaw, projectsRaw, featuredRaw, myTeamRaw] = await Promise.all([
+    db.query.cohort.findMany({
+      orderBy: [desc(cohortTable.current), desc(cohortTable.startedOn)],
+      columns: { id: true, name: true },
+      extras: {
+        projectsCount: sql<number>`(
+          select count(*)::int from ${team}
+          where ${team.cohortId} = ${cohortTable.id}
+        )`.as("projects_count"),
       },
     }),
-    prisma.team.findMany({
-      where,
-      orderBy: [{ featured: "desc" }, { updatedAt: "desc" }],
-      include: {
-        cohort: { select: { id: true, name: true } },
-        members: {
-          select: { user: { select: { name: true, email: true } } },
+    db.query.team.findMany({
+      where: and(...conditions),
+      orderBy: [desc(team.featured), desc(team.updatedAt)],
+      with: {
+        cohort: { columns: { id: true, name: true } },
+        teamMembers: {
+          columns: {},
+          with: { user: { columns: { name: true, email: true } } },
         },
-        _count: { select: { buildLogEntries: true } },
       },
-      take: 60,
+      extras: { buildLogEntriesCount: buildLogCount.as("build_log_count") },
+      limit: 60,
     }),
-    prisma.team.findFirst({
-      where: { featured: true, status: { not: "archived" } },
-      include: {
-        cohort: { select: { id: true, name: true } },
-        members: {
-          select: { user: { select: { name: true, email: true } } },
+    db.query.team.findFirst({
+      where: and(eq(team.featured, true), ne(team.status, "archived")),
+      with: {
+        cohort: { columns: { id: true, name: true } },
+        teamMembers: {
+          columns: {},
+          with: { user: { columns: { name: true, email: true } } },
         },
       },
-      orderBy: { featuredAt: "desc" },
+      orderBy: [desc(team.featuredAt)],
     }),
     // The user's own team's project (if any), so we can pin it at the top.
-    prisma.team.findFirst({
-      where: {
-        status: { not: "archived" },
-        members: { some: { userId: me.id } },
-      },
-      include: {
-        cohort: { select: { id: true, name: true } },
-        members: {
-          select: { user: { select: { name: true, email: true } } },
+    db.query.team.findFirst({
+      where: and(
+        ne(team.status, "archived"),
+        sql`exists (
+          select 1 from ${teamMember}
+          where ${teamMember.teamId} = ${team.id}
+            and ${teamMember.userId} = ${me.id}
+        )`,
+      ),
+      with: {
+        cohort: { columns: { id: true, name: true } },
+        teamMembers: {
+          columns: {},
+          with: { user: { columns: { name: true, email: true } } },
         },
-        _count: { select: { buildLogEntries: true } },
       },
+      extras: { buildLogEntriesCount: buildLogCount.as("build_log_count") },
     }),
   ]);
+
+  // Map Drizzle relation names / extras back to the keys the JSX expects
+  // (teamMembers → members, *Count extras → _count).
+  const cohorts = cohortsRaw.map((c) => ({
+    ...c,
+    _count: { projects: c.projectsCount },
+  }));
+  const projects = projectsRaw.map((p) => ({
+    ...p,
+    tags: p.tags ?? [],
+    members: p.teamMembers,
+    _count: { buildLogEntries: p.buildLogEntriesCount },
+  }));
+  const featuredOne = featuredRaw
+    ? { ...featuredRaw, members: featuredRaw.teamMembers }
+    : null;
+  const myTeamProject = myTeamRaw
+    ? {
+        ...myTeamRaw,
+        members: myTeamRaw.teamMembers,
+        _count: { buildLogEntries: myTeamRaw.buildLogEntriesCount },
+      }
+    : null;
 
   const allTags = new Set<string>();
   for (const p of projects) p.tags.forEach((t) => allTags.add(t));

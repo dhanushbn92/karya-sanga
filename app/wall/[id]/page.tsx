@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { eq } from "drizzle-orm";
 import { requireUser } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { db, wallPost } from "@/lib/db";
 import { signedWallImageUrls } from "@/lib/supabase/admin";
 import { deleteWallPost } from "@/lib/actions/wall";
 import { ReactionBar } from "@/components/wall/reaction-bar";
@@ -40,20 +41,32 @@ export default async function WallPostPage({
   const isMod = user.role === "admin" || user.role === "instructor";
   const { id } = await params;
 
-  const post = await prisma.wallPost.findUnique({
-    where: { id },
-    include: {
-      author: { select: { id: true, name: true, email: true, handle: true } },
-      reactions: { select: { type: true, userId: true } },
+  const postRaw = await db.query.wallPost.findFirst({
+    where: eq(wallPost.id, id),
+    with: {
+      user_authorId: {
+        columns: { id: true, name: true, email: true, handle: true },
+      },
+      reactions: { columns: { type: true, userId: true } },
       comments: {
-        orderBy: { createdAt: "asc" },
-        include: {
-          author: { select: { id: true, name: true, email: true } },
+        orderBy: (c, { asc }) => [asc(c.createdAt)],
+        with: {
+          user: { columns: { id: true, name: true, email: true } },
         },
       },
     },
   });
-  if (!post) notFound();
+  if (!postRaw) notFound();
+
+  // Map Drizzle relation names back to the keys the JSX expects
+  // (user_authorId → author, comment.user → comment.author).
+  const post = {
+    ...postRaw,
+    tags: postRaw.tags ?? [],
+    mediaUrls: postRaw.mediaUrls ?? [],
+    author: postRaw.user_authorId,
+    comments: postRaw.comments.map((c) => ({ ...c, author: c.user })),
+  };
 
   // Visibility: approved → anyone; otherwise author + mods only.
   const canSee = post.approved || post.authorId === user.id || isMod;

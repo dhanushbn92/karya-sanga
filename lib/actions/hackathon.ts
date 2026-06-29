@@ -3,7 +3,18 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { prisma } from "@/lib/prisma";
+import { and, asc, eq, ne } from "drizzle-orm";
+import { createId } from "@paralleldrive/cuid2";
+import {
+  db,
+  hackathonConfig,
+  team,
+  teamMember,
+  teamWokwiLink,
+  lookingForTeam,
+  teamMessage,
+  user,
+} from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 
 /**
@@ -18,12 +29,14 @@ import { requireUser } from "@/lib/auth";
  */
 
 async function getMaxTeamSize() {
-  const cfg = await prisma.hackathonConfig.upsert({
-    where: { id: "default" },
-    create: { id: "default" },
-    update: {},
-    select: { maxTeamSize: true },
-  });
+  const [cfg] = await db
+    .insert(hackathonConfig)
+    .values({ id: "default", updatedAt: new Date() })
+    .onConflictDoUpdate({
+      target: hackathonConfig.id,
+      set: { id: "default" },
+    })
+    .returning({ maxTeamSize: hackathonConfig.maxTeamSize });
   return cfg.maxTeamSize;
 }
 
@@ -40,12 +53,12 @@ const createTeamSchema = z.object({
 });
 
 export async function createTeam(formData: FormData): Promise<void> {
-  const user = await requireUser();
+  const user_ = await requireUser();
 
   // Prevent double-team membership before we touch the DB.
-  const existing = await prisma.teamMember.findUnique({
-    where: { userId: user.id },
-    select: { teamId: true },
+  const existing = await db.query.teamMember.findFirst({
+    where: eq(teamMember.userId, user_.id),
+    columns: { teamId: true },
   });
   if (existing) {
     throw new Error("You're already on a team. Leave it first to create another.");
@@ -63,119 +76,135 @@ export async function createTeam(formData: FormData): Promise<void> {
   // teams by `Team.cohortId` so without this set the team falls out of every
   // workshop's view. Prefer the user's primary cohortId; fall back to their
   // first secondary membership (when they don't have a primary set yet).
-  const me = await prisma.user.findUnique({
-    where: { id: user.id },
-    select: {
-      cohortId: true,
-      workshops: {
-        select: { cohortId: true },
-        orderBy: { joinedAt: "asc" },
-        take: 1,
+  const me = await db.query.user.findFirst({
+    where: eq(user.id, user_.id),
+    columns: { cohortId: true },
+    with: {
+      userCohorts: {
+        columns: { cohortId: true },
+        orderBy: (uc, { asc }) => [asc(uc.joinedAt)],
+        limit: 1,
       },
     },
   });
   const teamCohortId =
-    me?.cohortId ?? me?.workshops[0]?.cohortId ?? null;
+    me?.cohortId ?? me?.userCohorts[0]?.cohortId ?? null;
 
   // Atomic create-team-and-add-captain.
-  const team = await prisma.team.create({
-    data: {
+  const teamId = createId();
+  await db.transaction(async (tx) => {
+    await tx.insert(team).values({
+      id: teamId,
       name: parsed.data.name,
       description: parsed.data.description || null,
       cohortId: teamCohortId,
-      members: {
-        create: {
-          userId: user.id,
-          isCaptain: true,
-        },
-      },
-    },
-    select: { id: true },
+      updatedAt: new Date(),
+    });
+    await tx.insert(teamMember).values({
+      id: createId(),
+      teamId,
+      userId: user_.id,
+      isCaptain: true,
+    });
   });
 
   revalidatePath("/hackathon");
-  redirect(`/hackathon/teams/${team.id}`);
+  redirect(`/hackathon/teams/${teamId}`);
 }
 
 export async function joinTeam(formData: FormData): Promise<void> {
-  const user = await requireUser();
+  const user_ = await requireUser();
   const teamId = String(formData.get("teamId") ?? "");
   if (!teamId) throw new Error("Missing team id");
 
-  const existing = await prisma.teamMember.findUnique({
-    where: { userId: user.id },
-    select: { teamId: true },
+  const existing = await db.query.teamMember.findFirst({
+    where: eq(teamMember.userId, user_.id),
+    columns: { teamId: true },
   });
   if (existing) {
     throw new Error("You're already on a team.");
   }
 
-  const team = await prisma.team.findUnique({
-    where: { id: teamId },
-    include: { _count: { select: { members: true } } },
+  const teamRow = await db.query.team.findFirst({
+    where: eq(team.id, teamId),
   });
-  if (!team) throw new Error("Team not found");
-  if (!team.lookingForMembers) {
+  if (!teamRow) throw new Error("Team not found");
+  if (!teamRow.lookingForMembers) {
     throw new Error("This team isn't accepting new members right now.");
   }
+  const memberCount = await db.$count(
+    teamMember,
+    eq(teamMember.teamId, teamRow.id),
+  );
   const maxSize = await getMaxTeamSize();
-  if (team._count.members >= maxSize) {
+  if (memberCount >= maxSize) {
     throw new Error(`Team is full (${maxSize} max).`);
   }
 
-  await prisma.teamMember.create({
-    data: { teamId: team.id, userId: user.id },
+  await db.insert(teamMember).values({
+    id: createId(),
+    teamId: teamRow.id,
+    userId: user_.id,
   });
 
   // If joining filled the team, flip off "looking for members".
-  if (team._count.members + 1 >= maxSize) {
-    await prisma.team.update({
-      where: { id: team.id },
-      data: { lookingForMembers: false },
-    });
+  if (memberCount + 1 >= maxSize) {
+    await db
+      .update(team)
+      .set({ lookingForMembers: false, updatedAt: new Date() })
+      .where(eq(team.id, teamRow.id));
   }
 
   // Remove the user's looking-for-team post if they had one.
-  await prisma.lookingForTeam
-    .delete({ where: { userId: user.id } })
+  await db
+    .delete(lookingForTeam)
+    .where(eq(lookingForTeam.userId, user_.id))
     .catch(() => {});
 
   revalidatePath("/hackathon");
-  redirect(`/hackathon/teams/${team.id}`);
+  redirect(`/hackathon/teams/${teamRow.id}`);
 }
 
 export async function leaveTeam(): Promise<void> {
-  const user = await requireUser();
-  const member = await prisma.teamMember.findUnique({
-    where: { userId: user.id },
-    include: { team: { include: { _count: { select: { members: true } } } } },
+  const user_ = await requireUser();
+  const member = await db.query.teamMember.findFirst({
+    where: eq(teamMember.userId, user_.id),
+    with: { team: true },
   });
   if (!member) throw new Error("You aren't on a team.");
 
+  const memberCount = await db.$count(
+    teamMember,
+    eq(teamMember.teamId, member.teamId),
+  );
+
   // If you're the last member, delete the team entirely (cascade drops members + links).
-  if (member.team._count.members === 1) {
-    await prisma.team.delete({ where: { id: member.teamId } });
+  if (memberCount === 1) {
+    await db.delete(team).where(eq(team.id, member.teamId));
   } else {
     // If you were captain, promote the next member by joinedAt asc.
     if (member.isCaptain) {
-      const next = await prisma.teamMember.findFirst({
-        where: { teamId: member.teamId, NOT: { id: member.id } },
-        orderBy: { joinedAt: "asc" },
-        select: { id: true },
+      const next = await db.query.teamMember.findFirst({
+        where: and(
+          eq(teamMember.teamId, member.teamId),
+          ne(teamMember.id, member.id),
+        ),
+        orderBy: [asc(teamMember.joinedAt)],
+        columns: { id: true },
       });
       if (next) {
-        await prisma.teamMember.update({
-          where: { id: next.id },
-          data: { isCaptain: true },
-        });
+        await db
+          .update(teamMember)
+          .set({ isCaptain: true })
+          .where(eq(teamMember.id, next.id));
       }
     }
-    await prisma.teamMember.delete({ where: { id: member.id } });
+    await db.delete(teamMember).where(eq(teamMember.id, member.id));
     // Team may now have room — make sure it's findable again.
-    await prisma.team.update({
-      where: { id: member.teamId },
-      data: { lookingForMembers: true },
-    });
+    await db
+      .update(team)
+      .set({ lookingForMembers: true, updatedAt: new Date() })
+      .where(eq(team.id, member.teamId));
   }
 
   revalidatePath("/hackathon");
@@ -200,16 +229,16 @@ const workspaceSchema = z.object({
 });
 
 async function requireTeamMember(userId: string, teamId: string) {
-  const member = await prisma.teamMember.findFirst({
-    where: { userId, teamId },
-    select: { id: true, isCaptain: true },
+  const member = await db.query.teamMember.findFirst({
+    where: and(eq(teamMember.userId, userId), eq(teamMember.teamId, teamId)),
+    columns: { id: true, isCaptain: true },
   });
   if (!member) throw new Error("You aren't on this team.");
   return member;
 }
 
 export async function updateTeamWorkspace(formData: FormData): Promise<void> {
-  const user = await requireUser();
+  const user_ = await requireUser();
   const parsed = workspaceSchema.safeParse({
     teamId: formData.get("teamId"),
     projectTitle: formData.get("projectTitle") ?? undefined,
@@ -222,18 +251,19 @@ export async function updateTeamWorkspace(formData: FormData): Promise<void> {
     throw new Error(parsed.error.issues[0]?.message ?? "Invalid input");
   }
 
-  await requireTeamMember(user.id, parsed.data.teamId);
+  await requireTeamMember(user_.id, parsed.data.teamId);
 
-  await prisma.team.update({
-    where: { id: parsed.data.teamId },
-    data: {
+  await db
+    .update(team)
+    .set({
       projectTitle: parsed.data.projectTitle || null,
       projectDescription: parsed.data.projectDescription || null,
       repoUrl: parsed.data.repoUrl || null,
       buildLog: parsed.data.buildLog || null,
       lookingForMembers: parsed.data.lookingForMembers,
-    },
-  });
+      updatedAt: new Date(),
+    })
+    .where(eq(team.id, parsed.data.teamId));
 
   revalidatePath(`/hackathon/teams/${parsed.data.teamId}`);
   revalidatePath("/hackathon");
@@ -252,7 +282,7 @@ const wokwiLinkSchema = z.object({
 });
 
 export async function addTeamWokwiLink(formData: FormData): Promise<void> {
-  const user = await requireUser();
+  const user_ = await requireUser();
   const parsed = wokwiLinkSchema.safeParse({
     teamId: formData.get("teamId"),
     label: formData.get("label"),
@@ -261,26 +291,25 @@ export async function addTeamWokwiLink(formData: FormData): Promise<void> {
   if (!parsed.success) {
     throw new Error(parsed.error.issues[0]?.message ?? "Invalid input");
   }
-  await requireTeamMember(user.id, parsed.data.teamId);
+  await requireTeamMember(user_.id, parsed.data.teamId);
 
-  await prisma.teamWokwiLink.create({
-    data: {
-      teamId: parsed.data.teamId,
-      label: parsed.data.label,
-      wokwiProjectUrl: parsed.data.wokwiProjectUrl,
-      addedById: user.id,
-    },
+  await db.insert(teamWokwiLink).values({
+    id: createId(),
+    teamId: parsed.data.teamId,
+    label: parsed.data.label,
+    wokwiProjectUrl: parsed.data.wokwiProjectUrl,
+    addedById: user_.id,
   });
   revalidatePath(`/hackathon/teams/${parsed.data.teamId}`);
 }
 
 export async function removeTeamWokwiLink(formData: FormData): Promise<void> {
-  const user = await requireUser();
+  const user_ = await requireUser();
   const id = String(formData.get("id") ?? "");
   const teamId = String(formData.get("teamId") ?? "");
   if (!id || !teamId) throw new Error("Missing id");
-  await requireTeamMember(user.id, teamId);
-  await prisma.teamWokwiLink.delete({ where: { id } });
+  await requireTeamMember(user_.id, teamId);
+  await db.delete(teamWokwiLink).where(eq(teamWokwiLink.id, id));
   revalidatePath(`/hackathon/teams/${teamId}`);
 }
 
@@ -298,11 +327,11 @@ const lookingSchema = z.object({
 });
 
 export async function postLookingForTeam(formData: FormData): Promise<void> {
-  const user = await requireUser();
+  const user_ = await requireUser();
 
-  const onTeam = await prisma.teamMember.findUnique({
-    where: { userId: user.id },
-    select: { id: true },
+  const onTeam = await db.query.teamMember.findFirst({
+    where: eq(teamMember.userId, user_.id),
+    columns: { id: true },
   });
   if (onTeam) {
     throw new Error("You're already on a team; leave it before posting.");
@@ -317,27 +346,33 @@ export async function postLookingForTeam(formData: FormData): Promise<void> {
     throw new Error(parsed.error.issues[0]?.message ?? "Invalid input");
   }
 
-  await prisma.lookingForTeam.upsert({
-    where: { userId: user.id },
-    create: {
-      userId: user.id,
+  await db
+    .insert(lookingForTeam)
+    .values({
+      id: createId(),
+      userId: user_.id,
       skills: parsed.data.skills,
       interests: parsed.data.interests || null,
       contact: parsed.data.contact || null,
-    },
-    update: {
-      skills: parsed.data.skills,
-      interests: parsed.data.interests || null,
-      contact: parsed.data.contact || null,
-    },
-  });
+      updatedAt: new Date(),
+    })
+    .onConflictDoUpdate({
+      target: lookingForTeam.userId,
+      set: {
+        skills: parsed.data.skills,
+        interests: parsed.data.interests || null,
+        contact: parsed.data.contact || null,
+        updatedAt: new Date(),
+      },
+    });
   revalidatePath("/hackathon");
 }
 
 export async function removeLookingForTeam(): Promise<void> {
-  const user = await requireUser();
-  await prisma.lookingForTeam
-    .delete({ where: { userId: user.id } })
+  const user_ = await requireUser();
+  await db
+    .delete(lookingForTeam)
+    .where(eq(lookingForTeam.userId, user_.id))
     .catch(() => {});
   revalidatePath("/hackathon");
 }
@@ -355,7 +390,7 @@ const teamMessageSchema = z.object({
  * Post a chat message to your team. Only members + mods can post.
  */
 export async function postTeamMessage(formData: FormData): Promise<void> {
-  const user = await requireUser();
+  const user_ = await requireUser();
   const parsed = teamMessageSchema.safeParse({
     teamId: formData.get("teamId"),
     body: formData.get("body"),
@@ -365,19 +400,22 @@ export async function postTeamMessage(formData: FormData): Promise<void> {
   }
   const { teamId, body } = parsed.data;
 
-  const isMod = user.role === "admin" || user.role === "instructor";
+  const isMod = user_.role === "admin" || user_.role === "instructor";
   if (!isMod) {
-    const member = await prisma.teamMember.findUnique({
-      where: { userId: user.id },
-      select: { teamId: true },
+    const member = await db.query.teamMember.findFirst({
+      where: eq(teamMember.userId, user_.id),
+      columns: { teamId: true },
     });
     if (!member || member.teamId !== teamId) {
       throw new Error("Only team members can post in the team chat");
     }
   }
 
-  await prisma.teamMessage.create({
-    data: { teamId, authorId: user.id, body: body.trim() },
+  await db.insert(teamMessage).values({
+    id: createId(),
+    teamId,
+    authorId: user_.id,
+    body: body.trim(),
   });
   revalidatePath(`/hackathon/teams/${teamId}`);
 }
@@ -391,23 +429,23 @@ const deleteTeamMessageSchema = z.object({
  * any. Returns silently if the message no longer exists.
  */
 export async function deleteTeamMessage(formData: FormData): Promise<void> {
-  const user = await requireUser();
+  const user_ = await requireUser();
   const parsed = deleteTeamMessageSchema.safeParse({
     id: formData.get("id"),
   });
   if (!parsed.success) throw new Error("Invalid input");
 
-  const msg = await prisma.teamMessage.findUnique({
-    where: { id: parsed.data.id },
-    select: { authorId: true, teamId: true },
+  const msg = await db.query.teamMessage.findFirst({
+    where: eq(teamMessage.id, parsed.data.id),
+    columns: { authorId: true, teamId: true },
   });
   if (!msg) return;
 
-  const isMod = user.role === "admin" || user.role === "instructor";
-  const isAuthor = msg.authorId === user.id;
+  const isMod = user_.role === "admin" || user_.role === "instructor";
+  const isAuthor = msg.authorId === user_.id;
   if (!isMod && !isAuthor) {
     throw new Error("Not allowed");
   }
-  await prisma.teamMessage.delete({ where: { id: parsed.data.id } });
+  await db.delete(teamMessage).where(eq(teamMessage.id, parsed.data.id));
   revalidatePath(`/hackathon/teams/${msg.teamId}`);
 }

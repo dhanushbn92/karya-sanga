@@ -2,7 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { prisma } from "@/lib/prisma";
+import { and, eq } from "drizzle-orm";
+import { createId } from "@paralleldrive/cuid2";
+import { db, projectReaction, projectComment, teamMember, team } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import type { ReactionType } from "../../generated/prisma/client";
 
@@ -34,17 +36,24 @@ export async function toggleProjectReaction(
   const { teamId, type } = parsed.data;
 
   // Toggle: if exists, delete; else insert.
-  const existing = await prisma.projectReaction.findUnique({
-    where: {
-      teamId_userId_type: { teamId, userId: user.id, type: type as ReactionType },
-    },
-    select: { id: true },
+  const existing = await db.query.projectReaction.findFirst({
+    where: and(
+      eq(projectReaction.teamId, teamId),
+      eq(projectReaction.userId, user.id),
+      eq(projectReaction.type, type as ReactionType),
+    ),
+    columns: { id: true },
   });
   if (existing) {
-    await prisma.projectReaction.delete({ where: { id: existing.id } });
+    await db
+      .delete(projectReaction)
+      .where(eq(projectReaction.id, existing.id));
   } else {
-    await prisma.projectReaction.create({
-      data: { teamId, userId: user.id, type: type as ReactionType },
+    await db.insert(projectReaction).values({
+      id: createId(),
+      teamId,
+      userId: user.id,
+      type: type as ReactionType,
     });
   }
   revalidatePath(`/gallery/${teamId}`);
@@ -64,12 +73,12 @@ export async function postProjectComment(formData: FormData): Promise<void> {
   if (!parsed.success) {
     throw new Error(parsed.error.issues[0]?.message ?? "Invalid input");
   }
-  await prisma.projectComment.create({
-    data: {
-      teamId: parsed.data.teamId,
-      authorId: user.id,
-      body: parsed.data.body.trim(),
-    },
+  await db.insert(projectComment).values({
+    id: createId(),
+    teamId: parsed.data.teamId,
+    authorId: user.id,
+    body: parsed.data.body.trim(),
+    updatedAt: new Date(),
   });
   revalidatePath(`/gallery/${parsed.data.teamId}`);
 }
@@ -80,16 +89,16 @@ export async function deleteProjectComment(
   const user = await requireUser();
   const id = String(formData.get("id") ?? "");
   if (!id) throw new Error("Missing id");
-  const c = await prisma.projectComment.findUnique({
-    where: { id },
-    select: { authorId: true, teamId: true },
+  const c = await db.query.projectComment.findFirst({
+    where: eq(projectComment.id, id),
+    columns: { authorId: true, teamId: true },
   });
   if (!c) return;
   const isMod = user.role === "admin" || user.role === "instructor";
   if (!isMod && c.authorId !== user.id) {
     throw new Error("Not allowed");
   }
-  await prisma.projectComment.delete({ where: { id } });
+  await db.delete(projectComment).where(eq(projectComment.id, id));
   revalidatePath(`/gallery/${c.teamId}`);
 }
 
@@ -117,25 +126,26 @@ export async function addProjectMedia(formData: FormData): Promise<void> {
 
   const isMod = user.role === "admin" || user.role === "instructor";
   if (!isMod) {
-    const m = await prisma.teamMember.findUnique({
-      where: { userId: user.id },
-      select: { teamId: true },
+    const m = await db.query.teamMember.findFirst({
+      where: eq(teamMember.userId, user.id),
+      columns: { teamId: true },
     });
     if (!m || m.teamId !== parsed.data.teamId) {
       throw new Error("Only team members can manage media");
     }
   }
 
-  const team = await prisma.team.findUnique({
-    where: { id: parsed.data.teamId },
-    select: { mediaUrls: true },
+  const t = await db.query.team.findFirst({
+    where: eq(team.id, parsed.data.teamId),
+    columns: { mediaUrls: true },
   });
-  if (!team) throw new Error("Team not found");
-  if (team.mediaUrls.includes(parsed.data.url)) return; // no-op
-  await prisma.team.update({
-    where: { id: parsed.data.teamId },
-    data: { mediaUrls: { set: [...team.mediaUrls, parsed.data.url] } },
-  });
+  if (!t) throw new Error("Team not found");
+  const current = t.mediaUrls ?? [];
+  if (current.includes(parsed.data.url)) return; // no-op
+  await db
+    .update(team)
+    .set({ mediaUrls: [...current, parsed.data.url], updatedAt: new Date() })
+    .where(eq(team.id, parsed.data.teamId));
   revalidatePath(`/gallery/${parsed.data.teamId}`);
 }
 
@@ -156,25 +166,27 @@ export async function removeProjectMedia(
 
   const isMod = user.role === "admin" || user.role === "instructor";
   if (!isMod) {
-    const m = await prisma.teamMember.findUnique({
-      where: { userId: user.id },
-      select: { teamId: true },
+    const m = await db.query.teamMember.findFirst({
+      where: eq(teamMember.userId, user.id),
+      columns: { teamId: true },
     });
     if (!m || m.teamId !== parsed.data.teamId) {
       throw new Error("Only team members can manage media");
     }
   }
 
-  const team = await prisma.team.findUnique({
-    where: { id: parsed.data.teamId },
-    select: { mediaUrls: true },
+  const t = await db.query.team.findFirst({
+    where: eq(team.id, parsed.data.teamId),
+    columns: { mediaUrls: true },
   });
-  if (!team) return;
-  await prisma.team.update({
-    where: { id: parsed.data.teamId },
-    data: {
-      mediaUrls: { set: team.mediaUrls.filter((u) => u !== parsed.data.url) },
-    },
-  });
+  if (!t) return;
+  const current = t.mediaUrls ?? [];
+  await db
+    .update(team)
+    .set({
+      mediaUrls: current.filter((u) => u !== parsed.data.url),
+      updatedAt: new Date(),
+    })
+    .where(eq(team.id, parsed.data.teamId));
   revalidatePath(`/gallery/${parsed.data.teamId}`);
 }

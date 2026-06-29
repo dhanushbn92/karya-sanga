@@ -2,7 +2,9 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { prisma } from "@/lib/prisma";
+import { eq } from "drizzle-orm";
+import { createId } from "@paralleldrive/cuid2";
+import { db, user, cohort, userCohort } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -99,11 +101,11 @@ export async function bulkAddPeopleToWorkshop(
   if (!cohortId) throw new Error("Missing workshop");
 
   // Confirm cohort exists (avoids leaking IDs).
-  const cohort = await prisma.cohort.findUnique({
-    where: { id: cohortId },
-    select: { id: true },
+  const cohortRow = await db.query.cohort.findFirst({
+    where: eq(cohort.id, cohortId),
+    columns: { id: true },
   });
-  if (!cohort) throw new Error("Workshop not found");
+  if (!cohortRow) throw new Error("Workshop not found");
 
   const lines = raw
     .split(/\r?\n/)
@@ -133,18 +135,21 @@ export async function bulkAddPeopleToWorkshop(
     }
     try {
       // Already on the platform?
-      const existing = await prisma.user.findUnique({
-        where: { email: parsed.email },
-        select: { id: true, name: true },
+      const existing = await db.query.user.findFirst({
+        where: eq(user.email, parsed.email),
+        columns: { id: true, name: true },
       });
       if (existing) {
-        await prisma.userCohort.upsert({
-          where: {
-            userId_cohortId: { userId: existing.id, cohortId },
-          },
-          create: { userId: existing.id, cohortId },
-          update: {},
-        });
+        await db
+          .insert(userCohort)
+          .values({
+            id: createId(),
+            userId: existing.id,
+            cohortId,
+          })
+          .onConflictDoNothing({
+            target: [userCohort.userId, userCohort.cohortId],
+          });
         results.push({
           kind: "added",
           email: parsed.email,
@@ -167,30 +172,35 @@ export async function bulkAddPeopleToWorkshop(
 
       // Upsert the public.User row in case the auth trigger raced us, then
       // set the fields we care about + primary cohortId.
-      await prisma.user.upsert({
-        where: { id: created.user.id },
-        create: {
+      await db
+        .insert(user)
+        .values({
           id: created.user.id,
           email: parsed.email,
           name: parsed.name,
           dob: parsed.dob,
           cohortId,
-        },
-        update: {
-          name: parsed.name,
-          dob: parsed.dob,
-          cohortId,
-        },
-      });
+        })
+        .onConflictDoUpdate({
+          target: user.id,
+          set: {
+            name: parsed.name,
+            dob: parsed.dob,
+            cohortId,
+          },
+        });
       // Also drop a UserCohort row so they show up via the join as well —
       // future workshops use this join exclusively.
-      await prisma.userCohort.upsert({
-        where: {
-          userId_cohortId: { userId: created.user.id, cohortId },
-        },
-        create: { userId: created.user.id, cohortId },
-        update: {},
-      });
+      await db
+        .insert(userCohort)
+        .values({
+          id: createId(),
+          userId: created.user.id,
+          cohortId,
+        })
+        .onConflictDoNothing({
+          target: [userCohort.userId, userCohort.cohortId],
+        });
 
       results.push({
         kind: "created",

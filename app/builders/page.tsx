@@ -1,6 +1,7 @@
 import Link from "next/link";
+import { and, asc, desc, eq, ilike, or, sql } from "drizzle-orm";
 import { requireUser } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { db, user, cohort as cohortTable } from "@/lib/db";
 
 export const metadata = { title: "People · Karya Sanga" };
 
@@ -30,61 +31,67 @@ export default async function BuildersPage({
   const query = (q ?? "").trim();
   const roleFilter: RoleFilter = mentor === "1" ? "mentor" : "all";
 
-  const where: {
-    cohortId?: string;
-    mentorAvailable?: boolean;
-    OR?: Array<{ name?: { contains: string; mode: "insensitive" } } | { handle?: { contains: string; mode: "insensitive" } } | { email?: { contains: string; mode: "insensitive" } }>;
-  } = {};
-  if (cohort) where.cohortId = cohort;
-  if (roleFilter === "mentor") where.mentorAvailable = true;
+  const conditions = [];
+  if (cohort) conditions.push(eq(user.cohortId, cohort));
+  if (roleFilter === "mentor") conditions.push(eq(user.mentorAvailable, true));
   if (query) {
-    where.OR = [
-      { name: { contains: query, mode: "insensitive" } },
-      { handle: { contains: query, mode: "insensitive" } },
-      { email: { contains: query, mode: "insensitive" } },
-    ];
+    const orClause = or(
+      ilike(user.name, `%${query}%`),
+      ilike(user.handle, `%${query}%`),
+      ilike(user.email, `%${query}%`),
+    );
+    if (orClause) conditions.push(orClause);
   }
 
-  const [cohorts, builders, totalCount, mentorCount, myCohortCount] =
+  const [cohortsRaw, buildersRaw, totalCount, mentorCount, myCohortCount] =
     await Promise.all([
-      prisma.cohort.findMany({
-        orderBy: [{ current: "desc" }, { startedOn: "desc" }],
-        select: {
-          id: true,
-          name: true,
-          _count: { select: { members: true } },
+      db.query.cohort.findMany({
+        orderBy: [desc(cohortTable.current), desc(cohortTable.startedOn)],
+        columns: { id: true, name: true },
+        extras: {
+          membersCount: sql<number>`(
+            select count(*)::int from ${user}
+            where ${user.cohortId} = ${cohortTable.id}
+          )`.as("members_count"),
         },
       }),
-      prisma.user.findMany({
-        where,
-        orderBy: [
-          { mentorAvailable: "desc" },
-          { name: "asc" },
-          { email: "asc" },
-        ],
-        include: {
-          cohort: { select: { id: true, name: true } },
-          earnedBadges: {
-            include: {
-              badge: { select: { slug: true, icon: true, tone: true } },
+      db.query.user.findMany({
+        where: conditions.length ? and(...conditions) : undefined,
+        orderBy: [desc(user.mentorAvailable), asc(user.name), asc(user.email)],
+        with: {
+          cohort: { columns: { id: true, name: true } },
+          earnedBadges_userId: {
+            with: {
+              badge: { columns: { slug: true, icon: true, tone: true } },
             },
           },
         },
-        take: 200,
+        limit: 200,
       }),
-      prisma.user.count(),
-      prisma.user.count({ where: { mentorAvailable: true } }),
+      db.$count(user),
+      db.$count(user, eq(user.mentorAvailable, true)),
       // My-cohort count (skip if I don't have a cohort)
-      prisma.user
-        .findUnique({
-          where: { id: me.id },
-          select: { cohortId: true },
+      db.query.user
+        .findFirst({
+          where: eq(user.id, me.id),
+          columns: { cohortId: true },
         })
         .then(async (u) => {
           if (!u?.cohortId) return null;
-          return prisma.user.count({ where: { cohortId: u.cohortId } });
+          return db.$count(user, eq(user.cohortId, u.cohortId));
         }),
     ]);
+
+  // Map Drizzle relation names / extras back to the keys the JSX expects
+  // (membersCount → _count.members, earnedBadges_userId → earnedBadges).
+  const cohorts = cohortsRaw.map((c) => ({
+    ...c,
+    _count: { members: c.membersCount },
+  }));
+  const builders = buildersRaw.map((b) => ({
+    ...b,
+    earnedBadges: b.earnedBadges_userId,
+  }));
 
   return (
     <main className="mx-auto w-full max-w-[1280px] flex-1 px-4 md:px-12 py-12">
