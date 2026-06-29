@@ -60,7 +60,10 @@ export const getCurrentUser = cache(
 
     // Trigger may have failed or not been applied yet — fall back to a safe
     // upsert so the app stays usable. Defaults to `participant`.
-    const [created] = await db
+    // Insert if missing; leave an existing row untouched (don't clobber a
+    // user's edited profile). Then read it back — onConflictDoNothing returns
+    // nothing when the row already exists, so we select explicitly.
+    await db
       .insert(user)
       .values({
         id: authedUser.id,
@@ -72,14 +75,17 @@ export const getCurrentUser = cache(
         avatarUrl:
           (authedUser.user_metadata?.avatar_url as string | undefined) ?? null,
       })
-      .onConflictDoUpdate({ target: user.id, set: {} })
-      .returning({
+      .onConflictDoNothing();
+    const [created] = await db
+      .select({
         id: user.id,
         email: user.email,
         name: user.name,
         role: user.role,
         avatarUrl: user.avatarUrl,
-      });
+      })
+      .from(user)
+      .where(eq(user.id, authedUser.id));
     return created;
   },
 );

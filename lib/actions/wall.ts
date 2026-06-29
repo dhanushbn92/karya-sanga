@@ -36,7 +36,10 @@ async function getWallConfig() {
   const [row] = await db
     .insert(hackathonConfig)
     .values({ id: "default", updatedAt: new Date() })
-    .onConflictDoUpdate({ target: hackathonConfig.id, set: {} })
+    .onConflictDoUpdate({
+      target: hackathonConfig.id,
+      set: { updatedAt: new Date() },
+    })
     .returning({ wallRequireApproval: hackathonConfig.wallRequireApproval });
   return row;
 }

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { and, asc, desc, eq, ilike, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, ilike, isNotNull, or } from "drizzle-orm";
 import { requireUser } from "@/lib/auth";
 import { db, user, cohort as cohortTable } from "@/lib/db";
 
@@ -43,17 +43,11 @@ export default async function BuildersPage({
     if (orClause) conditions.push(orClause);
   }
 
-  const [cohortsRaw, buildersRaw, totalCount, mentorCount, myCohortCount] =
+  const [cohortsRaw, buildersRaw, totalCount, mentorCount, myCohortCount, memberCountRows] =
     await Promise.all([
       db.query.cohort.findMany({
         orderBy: [desc(cohortTable.current), desc(cohortTable.startedOn)],
         columns: { id: true, name: true },
-        extras: {
-          membersCount: sql<number>`(
-            select count(*)::int from ${user}
-            where ${user.cohortId} = ${cohortTable.id}
-          )`.as("members_count"),
-        },
       }),
       db.query.user.findMany({
         where: conditions.length ? and(...conditions) : undefined,
@@ -80,13 +74,24 @@ export default async function BuildersPage({
           if (!u?.cohortId) return null;
           return db.$count(user, eq(user.cohortId, u.cohortId));
         }),
+      // Members per cohort — computed as a grouped aggregate rather than a
+      // correlated subquery in `extras` (which mis-resolves table aliases
+      // inside db.query and generates broken SQL).
+      db
+        .select({ cohortId: user.cohortId, n: count() })
+        .from(user)
+        .where(isNotNull(user.cohortId))
+        .groupBy(user.cohortId),
     ]);
+  const memberCountMap = new Map(
+    memberCountRows.map((r) => [r.cohortId, r.n]),
+  );
 
   // Map Drizzle relation names / extras back to the keys the JSX expects
   // (membersCount → _count.members, earnedBadges_userId → earnedBadges).
   const cohorts = cohortsRaw.map((c) => ({
     ...c,
-    _count: { members: c.membersCount },
+    _count: { members: memberCountMap.get(c.id) ?? 0 },
   }));
   const builders = buildersRaw.map((b) => ({
     ...b,

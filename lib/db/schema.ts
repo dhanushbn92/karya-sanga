@@ -648,8 +648,11 @@ export const projectComment = pgTable("ProjectComment", {
 
 export const conversation = pgTable("Conversation", {
 	id: text().primaryKey().notNull(),
-	userAid: uuid().notNull(),
-	userBid: uuid().notNull(),
+	// DB columns are "userAId"/"userBId" (capital I); drizzle-kit introspection
+	// mis-cased the property to userAid/userBid. Keep the property name (used by
+	// relations + app code) but map to the real column name.
+	userAid: uuid("userAId").notNull(),
+	userBid: uuid("userBId").notNull(),
 	lastMessageAt: timestamp({ precision: 3, mode: 'date' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
 	createdAt: timestamp({ precision: 3, mode: 'date' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
 }, (table) => [

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { and, desc, eq, ilike, ne, or, sql } from "drizzle-orm";
+import { and, count, desc, eq, ilike, inArray, isNotNull, ne, or, sql } from "drizzle-orm";
 import { requireUser } from "@/lib/auth";
 import { db, cohort as cohortTable, team, teamMember, buildLogEntry } from "@/lib/db";
 
@@ -63,22 +63,31 @@ export default async function GalleryPage({
     if (orClause) conditions.push(orClause);
   }
 
-  // Correlated count of build-log entries per team (replaces Prisma _count).
-  const buildLogCount = sql<number>`(
-    select count(*)::int from ${buildLogEntry}
-    where ${buildLogEntry.teamId} = ${team.id}
-  )`;
+  // Counts as grouped aggregates + the user's team ids. Correlated subqueries
+  // inside db.query mis-resolve table aliases, so we precompute here and merge.
+  const [projectsPerCohort, buildLogPerTeam, myTeamIdRows] = await Promise.all([
+    db
+      .select({ cohortId: team.cohortId, n: count() })
+      .from(team)
+      .where(isNotNull(team.cohortId))
+      .groupBy(team.cohortId),
+    db
+      .select({ teamId: buildLogEntry.teamId, n: count() })
+      .from(buildLogEntry)
+      .groupBy(buildLogEntry.teamId),
+    db
+      .select({ teamId: teamMember.teamId })
+      .from(teamMember)
+      .where(eq(teamMember.userId, me.id)),
+  ]);
+  const projectsCountMap = new Map(projectsPerCohort.map((r) => [r.cohortId, r.n]));
+  const buildLogCountMap = new Map(buildLogPerTeam.map((r) => [r.teamId, r.n]));
+  const myTeamIds = myTeamIdRows.map((r) => r.teamId);
 
   const [cohortsRaw, projectsRaw, featuredRaw, myTeamRaw] = await Promise.all([
     db.query.cohort.findMany({
       orderBy: [desc(cohortTable.current), desc(cohortTable.startedOn)],
       columns: { id: true, name: true },
-      extras: {
-        projectsCount: sql<number>`(
-          select count(*)::int from ${team}
-          where ${team.cohortId} = ${cohortTable.id}
-        )`.as("projects_count"),
-      },
     }),
     db.query.team.findMany({
       where: and(...conditions),
@@ -90,7 +99,6 @@ export default async function GalleryPage({
           with: { user: { columns: { name: true, email: true } } },
         },
       },
-      extras: { buildLogEntriesCount: buildLogCount.as("build_log_count") },
       limit: 60,
     }),
     db.query.team.findFirst({
@@ -108,11 +116,7 @@ export default async function GalleryPage({
     db.query.team.findFirst({
       where: and(
         ne(team.status, "archived"),
-        sql`exists (
-          select 1 from ${teamMember}
-          where ${teamMember.teamId} = ${team.id}
-            and ${teamMember.userId} = ${me.id}
-        )`,
+        myTeamIds.length ? inArray(team.id, myTeamIds) : sql`false`,
       ),
       with: {
         cohort: { columns: { id: true, name: true } },
@@ -121,7 +125,6 @@ export default async function GalleryPage({
           with: { user: { columns: { name: true, email: true } } },
         },
       },
-      extras: { buildLogEntriesCount: buildLogCount.as("build_log_count") },
     }),
   ]);
 
@@ -129,13 +132,13 @@ export default async function GalleryPage({
   // (teamMembers → members, *Count extras → _count).
   const cohorts = cohortsRaw.map((c) => ({
     ...c,
-    _count: { projects: c.projectsCount },
+    _count: { projects: projectsCountMap.get(c.id) ?? 0 },
   }));
   const projects = projectsRaw.map((p) => ({
     ...p,
     tags: p.tags ?? [],
     members: p.teamMembers,
-    _count: { buildLogEntries: p.buildLogEntriesCount },
+    _count: { buildLogEntries: buildLogCountMap.get(p.id) ?? 0 },
   }));
   const featuredOne = featuredRaw
     ? { ...featuredRaw, members: featuredRaw.teamMembers }
@@ -144,7 +147,7 @@ export default async function GalleryPage({
     ? {
         ...myTeamRaw,
         members: myTeamRaw.teamMembers,
-        _count: { buildLogEntries: myTeamRaw.buildLogEntriesCount },
+        _count: { buildLogEntries: buildLogCountMap.get(myTeamRaw.id) ?? 0 },
       }
     : null;
 
