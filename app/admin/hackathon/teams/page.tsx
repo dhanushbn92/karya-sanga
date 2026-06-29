@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, notInArray } from "drizzle-orm";
 import { requireRole } from "@/lib/auth";
 import {
   db,
@@ -22,6 +22,21 @@ export const metadata = { title: "Team management · Admin" };
 
 export default async function AdminTeamsPage() {
   await requireRole(["admin", "instructor"]);
+
+  // Member counts as a grouped aggregate, and the set of users who already
+  // have a team, as a separate membership query. Correlated subqueries inside
+  // db.query mis-resolve table aliases, so we precompute here and merge.
+  const [memberCountRows, placedUserIdRows] = await Promise.all([
+    db
+      .select({ teamId: teamMember.teamId, n: count() })
+      .from(teamMember)
+      .groupBy(teamMember.teamId),
+    db.select({ userId: teamMember.userId }).from(teamMember),
+  ]);
+  const memberCountMap = new Map(memberCountRows.map((r) => [r.teamId, r.n]));
+  const placedUserIds = placedUserIdRows
+    .map((r) => r.userId)
+    .filter(Boolean);
 
   const [config, teamsRaw, soloParticipantsRaw, lookingPosts] =
     await Promise.all([
@@ -46,16 +61,15 @@ export default async function AdminTeamsPage() {
             },
           },
         },
-        extras: {
-          memberCount:
-            sql<number>`(select count(*)::int from ${teamMember} where ${teamMember.teamId} = ${team.id})`.as(
-              "memberCount",
-            ),
-        },
       }),
       // Participants (or judges — but most likely participants) with no team.
       db.query.user.findMany({
-        where: sql`${user.role} in ('participant', 'judge') and not exists (select 1 from ${teamMember} where ${teamMember.userId} = ${user.id})`,
+        where: and(
+          inArray(user.role, ["participant", "judge"]),
+          placedUserIds.length
+            ? notInArray(user.id, placedUserIds)
+            : undefined,
+        ),
         orderBy: [asc(user.createdAt)],
         columns: { id: true, email: true, name: true, role: true },
         with: {
@@ -78,7 +92,7 @@ export default async function AdminTeamsPage() {
   const teams = teamsRaw.map((t) => ({
     ...t,
     members: t.teamMembers,
-    _count: { members: Number(t.memberCount) },
+    _count: { members: memberCountMap.get(t.id) ?? 0 },
   }));
   const soloParticipants = soloParticipantsRaw.map((u) => ({
     ...u,

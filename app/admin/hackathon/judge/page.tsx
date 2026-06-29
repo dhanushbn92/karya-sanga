@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { desc, eq, sql } from "drizzle-orm";
+import { count, desc, eq } from "drizzle-orm";
 import { requireRole } from "@/lib/auth";
 import { db, submission, score } from "@/lib/db";
 
@@ -8,32 +8,38 @@ export const metadata = { title: "Judging · Karya Sanga" };
 export default async function JudgeIndexPage() {
   const me = await requireRole(["admin", "instructor", "judge"]);
 
-  const submissionsRaw = await db.query.submission.findMany({
-    orderBy: [desc(submission.submittedAt)],
-    with: {
-      team: { columns: { id: true, name: true } },
-      scores: {
-        where: eq(score.judgeId, me.id),
-        columns: {
-          innovation: true,
-          technical: true,
-          aiUse: true,
-          presentation: true,
+  // Scores-per-submission count as a grouped aggregate rather than a
+  // correlated subquery in `extras` (which mis-resolves table aliases
+  // inside db.query and generates broken SQL).
+  const [submissionsRaw, scoreCountRows] = await Promise.all([
+    db.query.submission.findMany({
+      orderBy: [desc(submission.submittedAt)],
+      with: {
+        team: { columns: { id: true, name: true } },
+        scores: {
+          where: eq(score.judgeId, me.id),
+          columns: {
+            innovation: true,
+            technical: true,
+            aiUse: true,
+            presentation: true,
+          },
         },
       },
-    },
-    extras: {
-      scoreCount:
-        sql<number>`(select count(*)::int from ${score} where ${score.submissionId} = ${submission.id})`.as(
-          "scoreCount",
-        ),
-    },
-  });
+    }),
+    db
+      .select({ submissionId: score.submissionId, n: count() })
+      .from(score)
+      .groupBy(score.submissionId),
+  ]);
+  const scoreCountMap = new Map(
+    scoreCountRows.map((r) => [r.submissionId, r.n]),
+  );
 
-  // Map _count.scores (Prisma) → scoreCount extra.
+  // Map _count.scores (Prisma) → scoreCount aggregate.
   const submissions = submissionsRaw.map((s) => ({
     ...s,
-    _count: { scores: Number(s.scoreCount) },
+    _count: { scores: scoreCountMap.get(s.id) ?? 0 },
   }));
 
   return (

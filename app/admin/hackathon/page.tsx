@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { asc, desc, eq, isNotNull, sql } from "drizzle-orm";
+import { asc, count, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { requireRole } from "@/lib/auth";
 import {
   db,
@@ -20,6 +20,27 @@ export const metadata = { title: "Hackathon · Admin" };
 export default async function HackathonAdminPage() {
   await requireRole(["admin", "instructor"]);
 
+  // Scores-per-submission count as a grouped aggregate, and the set of cohort
+  // ids that have their own hackathon config as a separate membership query.
+  // Correlated subqueries inside db.query mis-resolve table aliases, so we
+  // precompute here and merge.
+  const [scoreCountRows, overrideCohortIdRows] = await Promise.all([
+    db
+      .select({ submissionId: score.submissionId, n: count() })
+      .from(score)
+      .groupBy(score.submissionId),
+    db
+      .select({ cohortId: hackathonConfig.cohortId })
+      .from(hackathonConfig)
+      .where(isNotNull(hackathonConfig.cohortId)),
+  ]);
+  const scoreCountMap = new Map(
+    scoreCountRows.map((r) => [r.submissionId, r.n]),
+  );
+  const overrideCohortIds = overrideCohortIdRows
+    .map((r) => r.cohortId)
+    .filter((id): id is string => id !== null);
+
   const [config, teams, submissionsRaw, scoreCounts, perWorkshopOverridesRaw] =
     await Promise.all([
       // Global default config — per-workshop overrides live on each cohort.
@@ -39,18 +60,14 @@ export default async function HackathonAdminPage() {
         with: {
           team: { columns: { id: true, name: true } },
         },
-        extras: {
-          scoreCount:
-            sql<number>`(select count(*)::int from ${score} where ${score.submissionId} = ${submission.id})`.as(
-              "scoreCount",
-            ),
-        },
       }),
       db.$count(score),
       // Workshops with their own hackathon config — surface them here so
       // admins can see at a glance which workshops differ from default.
       db.query.cohort.findMany({
-        where: sql`exists (select 1 from ${hackathonConfig} where ${hackathonConfig.cohortId} = ${cohort.id})`,
+        where: overrideCohortIds.length
+          ? inArray(cohort.id, overrideCohortIds)
+          : sql`false`,
         columns: { id: true, name: true },
         with: {
           hackathonConfigs: {
@@ -68,7 +85,7 @@ export default async function HackathonAdminPage() {
   // _count.scores → scoreCount extra; hackathonConfig (one) → hackathonConfigs[0].
   const submissions = submissionsRaw.map((s) => ({
     ...s,
-    _count: { scores: Number(s.scoreCount) },
+    _count: { scores: scoreCountMap.get(s.id) ?? 0 },
   }));
   const perWorkshopOverrides = perWorkshopOverridesRaw.map((c) => ({
     ...c,

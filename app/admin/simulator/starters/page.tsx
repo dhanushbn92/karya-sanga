@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireRole } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { OpenLink } from "@/components/simulator/open-link";
 import {
   createStarter,
   deleteStarter,
@@ -209,18 +210,15 @@ export default async function StartersAdminPage() {
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <a
+                      <OpenLink
                         href={s.wokwiProjectUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
                         className="mono-label inline-flex items-center gap-1 rounded-full border border-white/20 px-3 py-1 text-on-surface-variant hover:border-primary/40 hover:text-primary"
-                        onClick={(e) => e.stopPropagation()}
                       >
                         Open
                         <span className="material-symbols-outlined text-[12px]">
                           open_in_new
                         </span>
-                      </a>
+                      </OpenLink>
                     </div>
                   </summary>
 
