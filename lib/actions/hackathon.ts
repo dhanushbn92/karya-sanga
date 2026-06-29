@@ -40,6 +40,29 @@ async function getMaxTeamSize() {
   return cfg.maxTeamSize;
 }
 
+/**
+ * Every workshop (cohort) a user belongs to — primary `User.cohortId` plus any
+ * secondary `UserCohort` memberships. The hackathon is workshop-scoped: a user
+ * can only form/join teams inside a workshop they're part of.
+ */
+async function getUserCohortIds(userId: string): Promise<string[]> {
+  const me = await db.query.user.findFirst({
+    where: eq(user.id, userId),
+    columns: { cohortId: true },
+    with: {
+      userCohorts: {
+        columns: { cohortId: true },
+        orderBy: (uc, { asc }) => [asc(uc.joinedAt)],
+      },
+    },
+  });
+  if (!me) return [];
+  const ids = new Set<string>();
+  if (me.cohortId) ids.add(me.cohortId);
+  for (const uc of me.userCohorts) if (uc.cohortId) ids.add(uc.cohortId);
+  return [...ids];
+}
+
 // =====================================================================
 // Team formation
 // =====================================================================
@@ -72,23 +95,15 @@ export async function createTeam(formData: FormData): Promise<void> {
     throw new Error(parsed.error.issues[0]?.message ?? "Invalid input");
   }
 
-  // Scope the team to the captain's workshop. The hackathon page filters
-  // teams by `Team.cohortId` so without this set the team falls out of every
-  // workshop's view. Prefer the user's primary cohortId; fall back to their
-  // first secondary membership (when they don't have a primary set yet).
-  const me = await db.query.user.findFirst({
-    where: eq(user.id, user_.id),
-    columns: { cohortId: true },
-    with: {
-      userCohorts: {
-        columns: { cohortId: true },
-        orderBy: (uc, { asc }) => [asc(uc.joinedAt)],
-        limit: 1,
-      },
-    },
-  });
-  const teamCohortId =
-    me?.cohortId ?? me?.userCohorts[0]?.cohortId ?? null;
+  // A team always belongs to a workshop. A user who isn't in any workshop
+  // can't create one — the hackathon runs inside workshops, not globally.
+  const cohortIds = await getUserCohortIds(user_.id);
+  if (cohortIds.length === 0) {
+    throw new Error(
+      "You need to be in a workshop to create a hackathon team. Ask your instructor to add you to one.",
+    );
+  }
+  const teamCohortId = cohortIds[0];
 
   // Atomic create-team-and-add-captain.
   const teamId = createId();
@@ -129,6 +144,13 @@ export async function joinTeam(formData: FormData): Promise<void> {
     where: eq(team.id, teamId),
   });
   if (!teamRow) throw new Error("Team not found");
+
+  // A team is workshop-scoped: only members of the team's workshop can join.
+  const cohortIds = await getUserCohortIds(user_.id);
+  if (!teamRow.cohortId || !cohortIds.includes(teamRow.cohortId)) {
+    throw new Error("You can only join a team in your own workshop.");
+  }
+
   if (!teamRow.lookingForMembers) {
     throw new Error("This team isn't accepting new members right now.");
   }
