@@ -8,16 +8,11 @@ const nextConfig: NextConfig = {
   images: {
     unoptimized: true,
   },
-  // Keep these out of the bundled server trace. Packages with a "workerd"
-  // export condition are copied ONCE by the OpenNext Cloudflare adapter
-  // instead of being inlined into handler.mjs by esbuild.
-  //   - pg / pg-cloudflare: the Postgres driver + its cloudflare:sockets TCP
-  //     impl; otherwise esbuild fails with "Could not resolve pg-cloudflare".
-  //   - @prisma/client: its query-compiler WASM (~2.4 MB) was getting inlined
-  //     into handler.mjs multiple times (the trace had several resolved
-  //     copies), pushing the worker to ~12.6 MB. Externalizing it makes
-  //     OpenNext copy the WASM once, keeping the worker under the size limit.
-  serverExternalPackages: ["pg", "pg-cloudflare", "@prisma/client"],
+  // Keep the Postgres driver out of the bundled server trace. `pg` loads
+  // `pg-cloudflare` (a TCP socket impl using `cloudflare:sockets`) via a
+  // "workerd" export condition; without externalizing, esbuild fails with
+  // "Could not resolve pg-cloudflare". Drizzle runs on this same pg driver.
+  serverExternalPackages: ["pg", "pg-cloudflare"],
 };
 
 // Open the OpenNext Cloudflare dev binding when running `next dev`. This is

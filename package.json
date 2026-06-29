@@ -7,10 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "postinstall": "prisma generate",
-    "db:sync": "prisma generate && prisma db push --accept-data-loss",
-    "db:baseline": "prisma migrate diff --from-empty --to-schema ./prisma/schema.prisma --script > prisma/SCHEMA_BASELINE.sql",
-    "cf:build": "prisma generate && prisma db push --accept-data-loss && node scripts/prune-prisma-engines.mjs && opennextjs-cloudflare build",
+    "db:pull": "drizzle-kit pull",
+    "cf:build": "opennextjs-cloudflare build",
     "cf:preview": "opennextjs-cloudflare preview",
     "cf:deploy": "opennextjs-cloudflare deploy",
     "cf:dryrun": "wrangler deploy --dry-run --outdir=.open-next/dryrun"
@@ -18,8 +16,6 @@
   "dependencies": {
     "@base-ui/react": "^1.5.0",
     "@paralleldrive/cuid2": "^3.3.0",
-    "@prisma/adapter-pg": "^7.8.0",
-    "@prisma/client": "^7.8.0",
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.106.2",
     "class-variance-authority": "^0.7.1",
@@ -50,7 +46,6 @@
     "drizzle-kit": "^0.31.10",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
-    "prisma": "^7.8.0",
     "tailwindcss": "^4",
     "typescript": "^5",
     "wrangler": "^4.105.0"

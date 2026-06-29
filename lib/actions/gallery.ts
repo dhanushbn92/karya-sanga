@@ -4,9 +4,17 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { and, eq } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
-import { db, projectReaction, projectComment, teamMember, team } from "@/lib/db";
+import {
+  db,
+  projectReaction,
+  projectComment,
+  reactionType,
+  teamMember,
+  team,
+} from "@/lib/db";
 import { requireUser } from "@/lib/auth";
-import type { ReactionType } from "../../generated/prisma/client";
+
+type ReactionType = (typeof reactionType.enumValues)[number];
 
 /**
  * Server actions for the project gallery detail page.

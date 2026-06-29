@@ -4,10 +4,18 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { and, eq, or } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
-import { db, hackathonConfig, wallPost, reaction, comment } from "@/lib/db";
+import {
+  db,
+  hackathonConfig,
+  wallPost,
+  reaction,
+  reactionType,
+  comment,
+} from "@/lib/db";
 import { requireRole, requireUser } from "@/lib/auth";
 import { deleteWallImage } from "@/lib/supabase/admin";
-import type { ReactionType } from "../../generated/prisma/client";
+
+type ReactionType = (typeof reactionType.enumValues)[number];
 
 /**
  * Photo wall server actions.
