@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "db:pull": "drizzle-kit pull",
+    "db:export": "drizzle-kit export",
     "cf:build": "opennextjs-cloudflare build",
     "cf:preview": "opennextjs-cloudflare preview",
     "cf:deploy": "opennextjs-cloudflare deploy",
