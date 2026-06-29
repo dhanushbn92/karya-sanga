@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { eq } from "drizzle-orm";
 import { requireRole } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { db, submission as submissionTable, score } from "@/lib/db";
 import { ScoreForm } from "@/components/hackathon/score-form";
 
 export const metadata = { title: "Score submission · Karya Sanga" };
@@ -14,11 +15,11 @@ export default async function ScoreSubmissionPage({
   const me = await requireRole(["admin", "instructor", "judge"]);
   const { submissionId } = await params;
 
-  const submission = await prisma.submission.findUnique({
-    where: { id: submissionId },
-    include: {
-      team: { select: { id: true, name: true } },
-      scores: { where: { judgeId: me.id } },
+  const submission = await db.query.submission.findFirst({
+    where: eq(submissionTable.id, submissionId),
+    with: {
+      team: { columns: { id: true, name: true } },
+      scores: { where: eq(score.judgeId, me.id) },
     },
   });
   if (!submission) notFound();

@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { and, eq } from "drizzle-orm";
 import { requireUser } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { db, user, conversation } from "@/lib/db";
 import {
   markConversationRead,
   sendDirectMessage,
@@ -28,9 +29,9 @@ export default async function ConversationPage({
   const { withUserId } = await params;
   if (withUserId === me.id) notFound();
 
-  const other = await prisma.user.findUnique({
-    where: { id: withUserId },
-    select: {
+  const other = await db.query.user.findFirst({
+    where: eq(user.id, withUserId),
+    columns: {
       id: true,
       name: true,
       email: true,
@@ -42,26 +43,41 @@ export default async function ConversationPage({
   const [userAId, userBId] =
     me.id < other.id ? [me.id, other.id] : [other.id, me.id];
 
-  const conversation = await prisma.conversation.findUnique({
-    where: { userAId_userBId: { userAId, userBId } },
-    include: {
-      messages: {
-        orderBy: { createdAt: "asc" },
-        include: {
-          author: {
-            select: { id: true, name: true, email: true, handle: true },
+  const convoRaw = await db.query.conversation.findFirst({
+    where: and(
+      eq(conversation.userAid, userAId),
+      eq(conversation.userBid, userBId),
+    ),
+    with: {
+      directMessages: {
+        orderBy: (m, { asc }) => [asc(m.createdAt)],
+        with: {
+          user: {
+            columns: { id: true, name: true, email: true, handle: true },
           },
         },
       },
     },
   });
 
+  // Map relation names → JSX keys (directMessages → messages, message.user →
+  // message.author).
+  const convo = convoRaw
+    ? {
+        ...convoRaw,
+        messages: convoRaw.directMessages.map((m) => ({
+          ...m,
+          author: m.user,
+        })),
+      }
+    : null;
+
   // Best-effort: mark anything they sent as read when we render the page.
-  if (conversation) {
-    await markConversationRead(conversation.id).catch(() => {});
+  if (convo) {
+    await markConversationRead(convo.id).catch(() => {});
   }
 
-  const messages = conversation?.messages ?? [];
+  const messages = convo?.messages ?? [];
   const otherName = other.name ?? other.email.split("@")[0];
 
   return (
@@ -140,7 +156,7 @@ export default async function ConversationPage({
               return (
                 <li
                   key={m.id}
-                  id={`m-${conversation?.id}`}
+                  id={`m-${convo?.id}`}
                   className={`flex ${mine ? "justify-end" : "justify-start"}`}
                 >
                   <div className="max-w-[80%]">

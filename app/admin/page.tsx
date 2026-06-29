@@ -1,6 +1,7 @@
 import Link from "next/link";
+import { and, eq } from "drizzle-orm";
 import { requireRole } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { db, module, lesson, user as userTable, wallPost, cohort } from "@/lib/db";
 
 export const metadata = { title: "Admin · Karya Sanga" };
 
@@ -15,12 +16,15 @@ export default async function AdminPage() {
     pendingWallCount,
     cohortCount,
   ] = await Promise.all([
-    prisma.module.count(),
-    prisma.lesson.count(),
-    prisma.lesson.count({ where: { published: true } }),
-    prisma.user.count(),
-    prisma.wallPost.count({ where: { approved: false, rejected: false } }),
-    prisma.cohort.count(),
+    db.$count(module),
+    db.$count(lesson),
+    db.$count(lesson, eq(lesson.published, true)),
+    db.$count(userTable),
+    db.$count(
+      wallPost,
+      and(eq(wallPost.approved, false), eq(wallPost.rejected, false)),
+    ),
+    db.$count(cohort),
   ]);
 
   return (

@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
+import { eq } from "drizzle-orm";
 import { requireUser } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { db, lesson as lessonTable } from "@/lib/db";
 import { splitIntoSlides } from "@/lib/slides";
 import { PresenterDeck } from "@/components/lessons/presenter-deck";
 
@@ -19,14 +20,12 @@ export default async function PresentPage({
   await requireUser();
   const { id } = await params;
 
-  const lesson = await prisma.lesson.findFirst({
-    where: {
-      id,
-      // Instructors author + reorder unpublished lessons too; the gate is at
-      // the lesson-list level. Presenter just needs the lesson to exist.
-    },
-    include: {
-      module: { select: { title: true } },
+  // Instructors author + reorder unpublished lessons too; the gate is at
+  // the lesson-list level. Presenter just needs the lesson to exist.
+  const lesson = await db.query.lesson.findFirst({
+    where: eq(lessonTable.id, id),
+    with: {
+      module: { columns: { title: true } },
     },
   });
   if (!lesson) notFound();

@@ -1,6 +1,14 @@
 import Link from "next/link";
+import { asc, desc, eq, isNotNull, sql } from "drizzle-orm";
 import { requireRole } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import {
+  db,
+  hackathonConfig,
+  team,
+  submission,
+  score,
+  cohort,
+} from "@/lib/db";
 import {
   lockSubmission,
   unlockSubmission,
@@ -12,37 +20,60 @@ export const metadata = { title: "Hackathon · Admin" };
 export default async function HackathonAdminPage() {
   await requireRole(["admin", "instructor"]);
 
-  const [config, teams, submissions, scoreCounts, perWorkshopOverrides] =
+  const [config, teams, submissionsRaw, scoreCounts, perWorkshopOverridesRaw] =
     await Promise.all([
       // Global default config — per-workshop overrides live on each cohort.
-      prisma.hackathonConfig.upsert({
-        where: { id: "default" },
-        create: { id: "default" },
-        update: {},
-      }),
-      prisma.team.count(),
-      prisma.submission.findMany({
-        orderBy: { submittedAt: "desc" },
-        include: {
-          team: { select: { id: true, name: true } },
-          _count: { select: { scores: true } },
+      // upsert on the "default" row, then read it back.
+      db
+        .insert(hackathonConfig)
+        .values({ id: "default", updatedAt: new Date() })
+        .onConflictDoNothing({ target: hackathonConfig.id })
+        .then(() =>
+          db.query.hackathonConfig.findFirst({
+            where: eq(hackathonConfig.id, "default"),
+          }),
+        ),
+      db.$count(team),
+      db.query.submission.findMany({
+        orderBy: [desc(submission.submittedAt)],
+        with: {
+          team: { columns: { id: true, name: true } },
+        },
+        extras: {
+          scoreCount:
+            sql<number>`(select count(*)::int from ${score} where ${score.submissionId} = ${submission.id})`.as(
+              "scoreCount",
+            ),
         },
       }),
-      prisma.score.count(),
+      db.$count(score),
       // Workshops with their own hackathon config — surface them here so
       // admins can see at a glance which workshops differ from default.
-      prisma.cohort.findMany({
-        where: { hackathonConfig: { isNot: null } },
-        select: {
-          id: true,
-          name: true,
-          hackathonConfig: {
-            select: { maxTeamSize: true, submitBy: true },
+      db.query.cohort.findMany({
+        where: sql`exists (select 1 from ${hackathonConfig} where ${hackathonConfig.cohortId} = ${cohort.id})`,
+        columns: { id: true, name: true },
+        with: {
+          hackathonConfigs: {
+            columns: { maxTeamSize: true, submitBy: true },
           },
         },
-        orderBy: { name: "asc" },
+        orderBy: [asc(cohort.name)],
       }),
     ]);
+
+  // config is the upserted "default" row (always exists after the insert above).
+  if (!config) throw new Error("HackathonConfig default row missing");
+
+  // Map Drizzle relation names back to the keys the JSX expects:
+  // _count.scores → scoreCount extra; hackathonConfig (one) → hackathonConfigs[0].
+  const submissions = submissionsRaw.map((s) => ({
+    ...s,
+    _count: { scores: Number(s.scoreCount) },
+  }));
+  const perWorkshopOverrides = perWorkshopOverridesRaw.map((c) => ({
+    ...c,
+    hackathonConfig: c.hackathonConfigs[0] ?? null,
+  }));
 
   // Format datetime-local input value (YYYY-MM-DDTHH:mm)
   const submitByValue = config.submitBy

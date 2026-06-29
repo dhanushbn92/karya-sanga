@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { eq } from "drizzle-orm";
 import { requireUser } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { db, cohort as cohortTable } from "@/lib/db";
 import { MessageButton } from "@/components/ui/message-button";
 
 export const metadata = { title: "People · Karya Sanga" };
@@ -39,13 +40,16 @@ export default async function WorkshopPeoplePage({
   const { view } = await searchParams;
   const mode: ViewMode = view === "card" ? "card" : "list";
 
-  const cohort = await prisma.cohort.findUnique({
-    where: { id },
-    select: {
+  const cohortRaw = await db.query.cohort.findFirst({
+    where: eq(cohortTable.id, id),
+    columns: {
       id: true,
       name: true,
-      members: {
-        select: {
+    },
+    with: {
+      // Primary members: User.cohortId === id (relation `users`).
+      users: {
+        columns: {
           id: true,
           email: true,
           name: true,
@@ -53,18 +57,20 @@ export default async function WorkshopPeoplePage({
           role: true,
           mentorAvailable: true,
           buildingNow: true,
-          earnedBadges: {
-            include: { badge: true },
-            orderBy: { earnedAt: "desc" },
+        },
+        with: {
+          earnedBadges_userId: {
+            with: { badge: true },
+            orderBy: (eb, { desc }) => [desc(eb.earnedAt)],
           },
         },
-        orderBy: [{ name: "asc" }, { email: "asc" }],
+        orderBy: (u, { asc }) => [asc(u.name), asc(u.email)],
       },
-      memberships: {
-        where: { user: { cohortId: { not: id } } },
-        include: {
+      // Secondary members via UserCohort join (relation `userCohorts`).
+      userCohorts: {
+        with: {
           user: {
-            select: {
+            columns: {
               id: true,
               email: true,
               name: true,
@@ -72,19 +78,52 @@ export default async function WorkshopPeoplePage({
               role: true,
               mentorAvailable: true,
               buildingNow: true,
-              cohort: { select: { name: true } },
-              earnedBadges: {
-                include: { badge: true },
-                orderBy: { earnedAt: "desc" },
+              cohortId: true,
+            },
+            with: {
+              cohort: { columns: { name: true } },
+              earnedBadges_userId: {
+                with: { badge: true },
+                orderBy: (eb, { desc }) => [desc(eb.earnedAt)],
               },
             },
           },
         },
-        orderBy: { joinedAt: "asc" },
+        orderBy: (uc, { asc }) => [asc(uc.joinedAt)],
       },
     },
   });
-  if (!cohort) notFound();
+  if (!cohortRaw) notFound();
+
+  // Remap Drizzle relation names back to what the JSX expects:
+  //   users                 → members
+  //   earnedBadges_userId   → earnedBadges
+  // and filter secondary members to those whose primary cohort differs
+  // (Prisma did this with `where: { user: { cohortId: { not: id } } }`).
+  const cohort = {
+    id: cohortRaw.id,
+    name: cohortRaw.name,
+    members: cohortRaw.users.map((u) => {
+      const { earnedBadges_userId, ...userRest } = u;
+      return { ...userRest, earnedBadges: earnedBadges_userId };
+    }),
+    memberships: cohortRaw.userCohorts
+      .filter((row) => row.user.cohortId !== id)
+      .map((row) => {
+        const { earnedBadges_userId, ...userRest } = row.user;
+        // `cohortId` was selected only for the filter above; drop it so the
+        // user shape matches the primary-member shape.
+        const { cohortId, ...userNoCohortId } = userRest;
+        void cohortId;
+        return {
+          ...row,
+          user: {
+            ...userNoCohortId,
+            earnedBadges: earnedBadges_userId,
+          },
+        };
+      }),
+  };
 
   type Person = (typeof cohort.members)[number] & {
     primaryCohortName?: string;

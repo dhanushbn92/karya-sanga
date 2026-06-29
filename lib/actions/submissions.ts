@@ -3,7 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { prisma } from "@/lib/prisma";
+import { and, eq } from "drizzle-orm";
+import { createId } from "@paralleldrive/cuid2";
+import { db, hackathonConfig, submission, score, teamMember } from "@/lib/db";
 import { requireRole, requireUser } from "@/lib/auth";
 
 /**
@@ -17,11 +19,15 @@ import { requireRole, requireUser } from "@/lib/auth";
  */
 
 async function getConfig() {
-  return prisma.hackathonConfig.upsert({
-    where: { id: "default" },
-    create: { id: "default" },
-    update: {},
-  });
+  const [cfg] = await db
+    .insert(hackathonConfig)
+    .values({ id: "default", updatedAt: new Date() })
+    .onConflictDoUpdate({
+      target: hackathonConfig.id,
+      set: { id: "default" },
+    })
+    .returning();
+  return cfg;
 }
 
 const wokwiUrlOptional = z
@@ -71,9 +77,12 @@ export async function submitProject(formData: FormData): Promise<void> {
   }
 
   // Caller must be on the team.
-  const member = await prisma.teamMember.findFirst({
-    where: { teamId: parsed.data.teamId, userId: user.id },
-    select: { id: true },
+  const member = await db.query.teamMember.findFirst({
+    where: and(
+      eq(teamMember.teamId, parsed.data.teamId),
+      eq(teamMember.userId, user.id),
+    ),
+    columns: { id: true },
   });
   if (!member) throw new Error("You aren't on this team.");
 
@@ -83,9 +92,9 @@ export async function submitProject(formData: FormData): Promise<void> {
     throw new Error("The submission deadline has passed.");
   }
 
-  const existing = await prisma.submission.findUnique({
-    where: { teamId: parsed.data.teamId },
-    select: { id: true, locked: true },
+  const existing = await db.query.submission.findFirst({
+    where: eq(submission.teamId, parsed.data.teamId),
+    columns: { id: true, locked: true },
   });
 
   if (existing && existing.locked) {
@@ -105,13 +114,16 @@ export async function submitProject(formData: FormData): Promise<void> {
   };
 
   if (existing) {
-    await prisma.submission.update({
-      where: { id: existing.id },
-      data: { ...data, submittedAt: new Date() },
-    });
+    await db
+      .update(submission)
+      .set({ ...data, submittedAt: new Date(), updatedAt: new Date() })
+      .where(eq(submission.id, existing.id));
   } else {
-    await prisma.submission.create({
-      data: { teamId: parsed.data.teamId, ...data },
+    await db.insert(submission).values({
+      id: createId(),
+      teamId: parsed.data.teamId,
+      ...data,
+      updatedAt: new Date(),
     });
   }
 
@@ -126,11 +138,11 @@ export async function unlockSubmission(formData: FormData): Promise<void> {
   await requireRole(["admin", "instructor"]);
   const submissionId = String(formData.get("submissionId") ?? "");
   if (!submissionId) throw new Error("Missing submission id");
-  const sub = await prisma.submission.update({
-    where: { id: submissionId },
-    data: { locked: false },
-    select: { teamId: true },
-  });
+  const [sub] = await db
+    .update(submission)
+    .set({ locked: false, updatedAt: new Date() })
+    .where(eq(submission.id, submissionId))
+    .returning({ teamId: submission.teamId });
   revalidatePath(`/hackathon/teams/${sub.teamId}`);
   revalidatePath("/admin/hackathon");
 }
@@ -139,11 +151,11 @@ export async function lockSubmission(formData: FormData): Promise<void> {
   await requireRole(["admin", "instructor"]);
   const submissionId = String(formData.get("submissionId") ?? "");
   if (!submissionId) throw new Error("Missing submission id");
-  const sub = await prisma.submission.update({
-    where: { id: submissionId },
-    data: { locked: true },
-    select: { teamId: true },
-  });
+  const [sub] = await db
+    .update(submission)
+    .set({ locked: true, updatedAt: new Date() })
+    .where(eq(submission.id, submissionId))
+    .returning({ teamId: submission.teamId });
   revalidatePath(`/hackathon/teams/${sub.teamId}`);
   revalidatePath("/admin/hackathon");
 }
@@ -177,14 +189,10 @@ export async function scoreSubmission(formData: FormData): Promise<void> {
     throw new Error(parsed.error.issues[0]?.message ?? "Invalid score");
   }
 
-  await prisma.score.upsert({
-    where: {
-      submissionId_judgeId: {
-        submissionId: parsed.data.submissionId,
-        judgeId: judge.id,
-      },
-    },
-    create: {
+  await db
+    .insert(score)
+    .values({
+      id: createId(),
       submissionId: parsed.data.submissionId,
       judgeId: judge.id,
       innovation: parsed.data.innovation,
@@ -192,15 +200,19 @@ export async function scoreSubmission(formData: FormData): Promise<void> {
       aiUse: parsed.data.aiUse,
       presentation: parsed.data.presentation,
       comment: parsed.data.comment || null,
-    },
-    update: {
-      innovation: parsed.data.innovation,
-      technical: parsed.data.technical,
-      aiUse: parsed.data.aiUse,
-      presentation: parsed.data.presentation,
-      comment: parsed.data.comment || null,
-    },
-  });
+      updatedAt: new Date(),
+    })
+    .onConflictDoUpdate({
+      target: [score.submissionId, score.judgeId],
+      set: {
+        innovation: parsed.data.innovation,
+        technical: parsed.data.technical,
+        aiUse: parsed.data.aiUse,
+        presentation: parsed.data.presentation,
+        comment: parsed.data.comment || null,
+        updatedAt: new Date(),
+      },
+    });
 
   revalidatePath(`/admin/hackathon/judge/${parsed.data.submissionId}`);
   revalidatePath("/admin/hackathon/judge");
@@ -238,20 +250,24 @@ export async function updateHackathonConfig(formData: FormData): Promise<void> {
     submitBy = parsedDate;
   }
 
-  await prisma.hackathonConfig.upsert({
-    where: { id: "default" },
-    create: {
+  await db
+    .insert(hackathonConfig)
+    .values({
       id: "default",
       maxTeamSize: parsed.data.maxTeamSize,
       submitBy,
       leaderboardPublic: parsed.data.leaderboardPublic,
-    },
-    update: {
-      maxTeamSize: parsed.data.maxTeamSize,
-      submitBy,
-      leaderboardPublic: parsed.data.leaderboardPublic,
-    },
-  });
+      updatedAt: new Date(),
+    })
+    .onConflictDoUpdate({
+      target: hackathonConfig.id,
+      set: {
+        maxTeamSize: parsed.data.maxTeamSize,
+        submitBy,
+        leaderboardPublic: parsed.data.leaderboardPublic,
+        updatedAt: new Date(),
+      },
+    });
 
   revalidatePath("/admin/hackathon");
   revalidatePath("/hackathon");

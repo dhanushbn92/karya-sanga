@@ -1,6 +1,7 @@
 import Link from "next/link";
+import { and, eq } from "drizzle-orm";
 import { requireRole } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { db, hackathonConfig, wallPost } from "@/lib/db";
 import { signedWallImageUrls } from "@/lib/supabase/admin";
 import {
   approveWallPost,
@@ -14,26 +15,48 @@ export const metadata = { title: "Wall moderation · Admin" };
 export default async function WallAdminPage() {
   await requireRole(["admin", "instructor"]);
 
-  const [config, pending, recent] = await Promise.all([
-    prisma.hackathonConfig.upsert({
-      where: { id: "default" },
-      create: { id: "default" },
-      update: {},
-      select: { wallRequireApproval: true },
+  // Ensure the default config row exists (upsert with an empty update),
+  // then read back the single flag the JSX needs.
+  await db
+    .insert(hackathonConfig)
+    .values({ id: "default", updatedAt: new Date() })
+    .onConflictDoNothing({ target: hackathonConfig.id });
+
+  const [configRow, pendingRaw, recentRaw] = await Promise.all([
+    db.query.hackathonConfig.findFirst({
+      where: eq(hackathonConfig.id, "default"),
+      columns: { wallRequireApproval: true },
     }),
-    prisma.wallPost.findMany({
-      where: { approved: false, rejected: false },
-      orderBy: { createdAt: "asc" },
-      take: 30,
-      include: { author: { select: { name: true, email: true } } },
+    db.query.wallPost.findMany({
+      where: and(eq(wallPost.approved, false), eq(wallPost.rejected, false)),
+      orderBy: (p, { asc }) => [asc(p.createdAt)],
+      limit: 30,
+      with: { user_authorId: { columns: { name: true, email: true } } },
     }),
-    prisma.wallPost.findMany({
-      where: { approved: true },
-      orderBy: { approvedAt: "desc" },
-      take: 12,
-      include: { author: { select: { name: true, email: true } } },
+    db.query.wallPost.findMany({
+      where: eq(wallPost.approved, true),
+      orderBy: (p, { desc }) => [desc(p.approvedAt)],
+      limit: 12,
+      with: { user_authorId: { columns: { name: true, email: true } } },
     }),
   ]);
+
+  // The row is guaranteed to exist (just upserted); fall back to the schema
+  // default so the consumer always gets a concrete config object.
+  const config = configRow ?? { wallRequireApproval: true };
+
+  // Map the user_authorId relation back to the `author` key the JSX reads,
+  // and coalesce the nullable `tags` array (Drizzle types it string[] | null).
+  const pending = pendingRaw.map((p) => ({
+    ...p,
+    tags: p.tags ?? [],
+    author: p.user_authorId,
+  }));
+  const recent = recentRaw.map((p) => ({
+    ...p,
+    tags: p.tags ?? [],
+    author: p.user_authorId,
+  }));
 
   const urls = await signedWallImageUrls(
     [...pending, ...recent]

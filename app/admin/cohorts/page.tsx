@@ -1,6 +1,7 @@
 import Link from "next/link";
+import { desc, eq, sql } from "drizzle-orm";
 import { requireRole } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { db, cohort, user as userTable, team, cohortPost } from "@/lib/db";
 import { createCohort } from "@/lib/actions/alumni";
 
 export const metadata = { title: "Workshops · Admin" };
@@ -8,12 +9,23 @@ export const metadata = { title: "Workshops · Admin" };
 export default async function CohortsAdminPage() {
   await requireRole(["admin", "instructor"]);
 
-  const cohorts = await prisma.cohort.findMany({
-    orderBy: [{ current: "desc" }, { startedOn: "desc" }],
-    include: {
-      _count: { select: { members: true, projects: true, posts: true } },
-    },
-  });
+  const cohortRows = await db
+    .select({
+      id: cohort.id,
+      name: cohort.name,
+      current: cohort.current,
+      members: db.$count(userTable, eq(userTable.cohortId, cohort.id)),
+      projects: db.$count(team, eq(team.cohortId, cohort.id)),
+      posts: db.$count(cohortPost, eq(cohortPost.cohortId, cohort.id)),
+    })
+    .from(cohort)
+    .orderBy(desc(cohort.current), desc(cohort.startedOn));
+
+  // Map flat counts into the _count shape the JSX expects.
+  const cohorts = cohortRows.map((c) => ({
+    ...c,
+    _count: { members: c.members, projects: c.projects, posts: c.posts },
+  }));
 
   return (
     <main className="mx-auto w-full max-w-[1280px] flex-1 px-4 md:px-16 py-12">

@@ -1,7 +1,14 @@
 import Link from "next/link";
+import { and, asc, desc, eq, inArray, or } from "drizzle-orm";
 import { requireUser } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import type { Role } from "../../generated/prisma/client";
+import {
+  db,
+  lookingForTeam,
+  team as teamTable,
+  teamMember,
+  user as userTable,
+  userCohort,
+} from "@/lib/db";
 import { getHackathonConfig } from "@/lib/hackathon-config";
 import {
   createTeam,
@@ -31,12 +38,12 @@ export default async function HackathonPage() {
   const user = await requireUser();
   const isMod = user.role === "admin" || user.role === "instructor";
 
-  const userWithCohort = await prisma.user.findUnique({
-    where: { id: user.id },
-    select: {
-      cohortId: true,
-      cohort: { select: { id: true, name: true } },
-      workshops: { select: { cohortId: true } },
+  const userWithCohort = await db.query.user.findFirst({
+    where: eq(userTable.id, user.id),
+    columns: { cohortId: true },
+    with: {
+      cohort: { columns: { id: true, name: true } },
+      userCohorts: { columns: { cohortId: true } },
     },
   });
   const myCohortId = userWithCohort?.cohortId ?? null;
@@ -45,7 +52,7 @@ export default async function HackathonPage() {
     new Set(
       [
         ...(myCohortId ? [myCohortId] : []),
-        ...(userWithCohort?.workshops?.map((w) => w.cohortId) ?? []),
+        ...(userWithCohort?.userCohorts?.map((w) => w.cohortId) ?? []),
       ].filter((id): id is string => !!id),
     ),
   );
@@ -54,40 +61,56 @@ export default async function HackathonPage() {
   // workshops (and isn't a mod). The no-cohort gate is already rendered
   // below so we don't need any rows for those sections.
   const hasScope = isMod || myCohortIds.length > 0;
+
   const teamWhere = isMod
-    ? {}
-    : { cohortId: { in: myCohortIds } };
+    ? undefined
+    : inArray(teamTable.cohortId, myCohortIds);
+
+  // The non-mod people query filters on either the user's primary cohort or
+  // any secondary workshop membership. Drizzle's relational `where` can't
+  // reference a child relation, so resolve the userIds that belong to the
+  // scoped cohorts via UserCohort up front and combine with an OR.
+  const scopedUserIds = isMod
+    ? []
+    : (
+        await db.query.userCohort.findMany({
+          columns: { userId: true },
+          where: inArray(userCohort.cohortId, myCohortIds),
+        })
+      ).map((r) => r.userId);
   const userWhere = isMod
-    ? { role: { in: ["participant", "judge"] as Role[] } }
-    : {
-        role: { in: ["participant", "judge"] as Role[] },
-        OR: [
-          { cohortId: { in: myCohortIds } },
-          { workshops: { some: { cohortId: { in: myCohortIds } } } },
-        ],
-      };
+    ? inArray(userTable.role, ["participant", "judge"])
+    : and(
+        inArray(userTable.role, ["participant", "judge"]),
+        or(
+          inArray(userTable.cohortId, myCohortIds),
+          scopedUserIds.length > 0
+            ? inArray(userTable.id, scopedUserIds)
+            : undefined,
+        ),
+      );
 
   const [
     config,
-    myMembership,
-    allTeams,
-    workshopPeople,
+    myMembershipRaw,
+    allTeamsRaw,
+    workshopPeopleRaw,
     lookingPosts,
     myLookingPost,
   ] = await Promise.all([
     getHackathonConfig(myCohortId),
-    prisma.teamMember.findUnique({
-      where: { userId: user.id },
-      include: {
+    db.query.teamMember.findFirst({
+      where: eq(teamMember.userId, user.id),
+      with: {
         team: {
-          include: {
-            cohort: { select: { id: true, name: true } },
-            submission: { select: { id: true, locked: true } },
-            members: {
-              orderBy: { joinedAt: "asc" },
-              include: {
+          with: {
+            cohort: { columns: { id: true, name: true } },
+            submissions: { columns: { id: true, locked: true } },
+            teamMembers: {
+              orderBy: (m, { asc }) => [asc(m.joinedAt)],
+              with: {
                 user: {
-                  select: {
+                  columns: {
                     id: true,
                     name: true,
                     email: true,
@@ -96,21 +119,20 @@ export default async function HackathonPage() {
                 },
               },
             },
-            _count: { select: { members: true } },
           },
         },
       },
     }),
     hasScope
-      ? prisma.team.findMany({
+      ? db.query.team.findMany({
           where: teamWhere,
-          include: {
-            cohort: { select: { id: true, name: true } },
-            members: {
-              orderBy: { joinedAt: "asc" },
-              include: {
+          with: {
+            cohort: { columns: { id: true, name: true } },
+            teamMembers: {
+              orderBy: (m, { asc }) => [asc(m.joinedAt)],
+              with: {
                 user: {
-                  select: {
+                  columns: {
                     id: true,
                     name: true,
                     email: true,
@@ -119,28 +141,29 @@ export default async function HackathonPage() {
                 },
               },
             },
-            _count: { select: { members: true } },
           },
-          orderBy: { createdAt: "asc" },
-          take: 100,
+          orderBy: [asc(teamTable.createdAt)],
+          limit: 100,
         })
       : Promise.resolve([]),
     hasScope
-      ? prisma.user.findMany({
+      ? db.query.user.findMany({
           where: userWhere,
-          orderBy: [{ name: "asc" }, { email: "asc" }],
-          select: {
+          orderBy: [asc(userTable.name), asc(userTable.email)],
+          columns: {
             id: true,
             name: true,
             email: true,
             handle: true,
             mentorAvailable: true,
-            cohort: { select: { id: true, name: true } },
-            teamMembership: {
-              select: {
-                isCaptain: true,
+          },
+          with: {
+            cohort: { columns: { id: true, name: true } },
+            teamMembers: {
+              columns: { isCaptain: true },
+              with: {
                 team: {
-                  select: {
+                  columns: {
                     id: true,
                     name: true,
                     cohortId: true,
@@ -149,20 +172,45 @@ export default async function HackathonPage() {
               },
             },
           },
-          take: 300,
+          limit: 300,
         })
       : Promise.resolve([]),
-    prisma.lookingForTeam.findMany({
-      orderBy: { updatedAt: "desc" },
-      take: 30,
-      include: {
-        user: { select: { id: true, name: true, email: true } },
+    db.query.lookingForTeam.findMany({
+      orderBy: [desc(lookingForTeam.updatedAt)],
+      limit: 30,
+      with: {
+        user: { columns: { id: true, name: true, email: true } },
       },
     }),
-    prisma.lookingForTeam.findUnique({
-      where: { userId: user.id },
+    db.query.lookingForTeam.findFirst({
+      where: eq(lookingForTeam.userId, user.id),
     }),
   ]);
+
+  // Map Drizzle relation names back to the keys the JSX expects.
+  // `teamMembers` → `members`, `submissions` (many, unique teamId) → single
+  // `submission`, and `teamMembers` on a user (unique userId) → single
+  // `teamMembership`. `_count.members` becomes the fetched members length.
+  const myMembership = myMembershipRaw
+    ? {
+        ...myMembershipRaw,
+        team: {
+          ...myMembershipRaw.team,
+          members: myMembershipRaw.team.teamMembers,
+          submission: myMembershipRaw.team.submissions[0] ?? null,
+          _count: { members: myMembershipRaw.team.teamMembers.length },
+        },
+      }
+    : null;
+  const allTeams = allTeamsRaw.map((t) => ({
+    ...t,
+    members: t.teamMembers,
+    _count: { members: t.teamMembers.length },
+  }));
+  const workshopPeople = workshopPeopleRaw.map((p) => ({
+    ...p,
+    teamMembership: p.teamMembers[0] ?? null,
+  }));
 
   const onTeam = !!myMembership;
   const lookingByUserId = new Map(

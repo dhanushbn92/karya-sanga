@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireRole } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
 import { createModule } from "@/lib/actions/admin-lessons";
 
 export const metadata = { title: "Chapters · Admin" };
@@ -8,10 +8,16 @@ export const metadata = { title: "Chapters · Admin" };
 export default async function ModulesAdminPage() {
   await requireRole(["admin", "instructor"]);
 
-  const modules = await prisma.module.findMany({
-    orderBy: { order: "asc" },
-    include: { _count: { select: { lessons: true } } },
+  const moduleRows = await db.query.module.findMany({
+    orderBy: (m, { asc }) => [asc(m.order)],
+    with: { lessons: { columns: { id: true } } },
   });
+
+  // Translate _count.lessons via fetched-rows length.
+  const modules = moduleRows.map((m) => ({
+    ...m,
+    _count: { lessons: m.lessons.length },
+  }));
 
   return (
     <main className="mx-auto w-full max-w-[1280px] flex-1 px-4 md:px-16 py-12">

@@ -1,7 +1,17 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { and, eq, inArray, or, isNull } from "drizzle-orm";
 import { requireRole } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import {
+  db,
+  cohort as cohortTable,
+  user as userTable,
+  userCohort,
+  workshopModule,
+  module as moduleTable,
+  badge,
+  hackathonConfig,
+} from "@/lib/db";
 import {
   addUserToWorkshop,
   adminAssignUserToCohort,
@@ -58,35 +68,42 @@ export default async function CohortEditPage({
     allCohorts,
     allUsers,
     everyUser,
-    secondaryMembers,
-    attachedRows,
-    allModules,
-    workshopBadges,
+    secondaryMembersRaw,
+    attachedRowsRaw,
+    allModulesRaw,
+    workshopBadgesRaw,
     workshopHackathonConfig,
   ] = await Promise.all([
-      prisma.cohort.findUnique({
-        where: { id },
-        include: {
-          members: {
-            select: {
-              id: true,
-              email: true,
-              name: true,
-              handle: true,
-              role: true,
+      db.query.cohort
+        .findFirst({
+          where: eq(cohortTable.id, id),
+          with: {
+            users: {
+              columns: {
+                id: true,
+                email: true,
+                name: true,
+                handle: true,
+                role: true,
+              },
+              orderBy: (u, { asc }) => [asc(u.name), asc(u.email)],
             },
-            orderBy: [{ name: "asc" }, { email: "asc" }],
           },
-        },
-      }),
-      prisma.cohort.findMany({ orderBy: { name: "asc" } }),
-      prisma.user.findMany({
-        where: {
-          OR: [{ cohortId: null }, { cohortId: id }],
-          role: { in: ["participant", "judge"] },
-        },
-        orderBy: [{ name: "asc" }, { email: "asc" }],
-        select: {
+        })
+        .then((c) =>
+          c
+            ? // Map the `users` relation to the `members` key the JSX reads.
+              { ...c, members: c.users }
+            : undefined,
+        ),
+      db.query.cohort.findMany({ orderBy: (c, { asc }) => [asc(c.name)] }),
+      db.query.user.findMany({
+        where: and(
+          or(isNull(userTable.cohortId), eq(userTable.cohortId, id)),
+          inArray(userTable.role, ["participant", "judge"]),
+        ),
+        orderBy: (u, { asc }) => [asc(u.name), asc(u.email)],
+        columns: {
           id: true,
           email: true,
           name: true,
@@ -95,68 +112,107 @@ export default async function CohortEditPage({
       }),
       // For the "Also enrolled" picker: every participant/judge in the system
       // so admins can add a user already in a *different* primary workshop.
-      prisma.user.findMany({
-        where: { role: { in: ["participant", "judge"] } },
-        orderBy: [{ name: "asc" }, { email: "asc" }],
-        select: {
+      db.query.user.findMany({
+        where: inArray(userTable.role, ["participant", "judge"]),
+        orderBy: (u, { asc }) => [asc(u.name), asc(u.email)],
+        columns: {
           id: true,
           email: true,
           name: true,
           cohortId: true,
-          cohort: { select: { name: true } },
+        },
+        with: {
+          cohort: { columns: { name: true } },
         },
       }),
       // Users joined to this workshop via UserCohort whose primary cohort
       // is different. These are the "secondary" members displayed separately.
-      prisma.userCohort.findMany({
-        where: { cohortId: id, user: { cohortId: { not: id } } },
-        include: {
+      db.query.userCohort.findMany({
+        where: eq(userCohort.cohortId, id),
+        with: {
           user: {
-            select: {
+            columns: {
               id: true,
               email: true,
               name: true,
               handle: true,
               role: true,
-              cohort: { select: { id: true, name: true } },
+              cohortId: true,
+            },
+            with: {
+              cohort: { columns: { id: true, name: true } },
             },
           },
         },
-        orderBy: { joinedAt: "asc" },
+        orderBy: (uc, { asc }) => [asc(uc.joinedAt)],
       }),
-      prisma.workshopModule.findMany({
-        where: { cohortId: id },
-        orderBy: { order: "asc" },
-        include: {
+      db.query.workshopModule.findMany({
+        where: eq(workshopModule.cohortId, id),
+        orderBy: (wm, { asc }) => [asc(wm.order)],
+        with: {
           module: {
-            select: {
+            columns: {
               id: true,
               title: true,
               description: true,
               published: true,
-              _count: { select: { lessons: true } },
+            },
+            with: {
+              lessons: { columns: { id: true } },
             },
           },
         },
       }),
-      prisma.module.findMany({
-        orderBy: { order: "asc" },
-        select: {
+      db.query.module.findMany({
+        orderBy: (m, { asc }) => [asc(m.order)],
+        columns: {
           id: true,
           title: true,
           description: true,
           published: true,
-          _count: { select: { lessons: true } },
+        },
+        with: {
+          lessons: { columns: { id: true } },
         },
       }),
-      prisma.badge.findMany({
-        where: { cohortId: id },
-        orderBy: { createdAt: "asc" },
-        include: { _count: { select: { earned: true } } },
+      db.query.badge.findMany({
+        where: eq(badge.cohortId, id),
+        orderBy: (b, { asc }) => [asc(b.createdAt)],
+        with: {
+          earnedBadges: { columns: { id: true } },
+        },
       }),
-      prisma.hackathonConfig.findUnique({ where: { cohortId: id } }),
+      db.query.hackathonConfig.findFirst({
+        where: eq(hackathonConfig.cohortId, id),
+      }),
     ]);
   if (!cohort) notFound();
+
+  // The Prisma query filtered UserCohort rows to users whose *primary* cohort
+  // differs from this one (`user: { cohortId: { not: id } }`). Drizzle can't
+  // express that relation filter inline, so apply it here.
+  const secondaryMembers = secondaryMembersRaw.filter(
+    (row) => row.user.cohortId !== id,
+  );
+
+  // Translate the nested module._count.lessons via fetched-rows length.
+  const attachedRows = attachedRowsRaw.map((row) => ({
+    ...row,
+    module: {
+      ...row.module,
+      _count: { lessons: row.module.lessons.length },
+    },
+  }));
+  const allModules = allModulesRaw.map((m) => ({
+    ...m,
+    _count: { lessons: m.lessons.length },
+  }));
+
+  // Translate badge._count.earned (earnedBadges relation) via rows length.
+  const workshopBadges = workshopBadgesRaw.map((b) => ({
+    ...b,
+    _count: { earned: b.earnedBadges.length },
+  }));
 
   const attachedIds = new Set(attachedRows.map((r) => r.moduleId));
   const unattachedModules = allModules.filter((m) => !attachedIds.has(m.id));

@@ -1,6 +1,19 @@
 import Link from "next/link";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { requireUser } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import {
+  db,
+  user as userTable,
+  teamMember,
+  cohortPost,
+  wallPost,
+  submission,
+  score,
+  progress,
+  earnedBadge,
+  lesson,
+  module as moduleTable,
+} from "@/lib/db";
 import { signedWallImageUrls } from "@/lib/supabase/admin";
 import { Mascot } from "@/components/ui/mascot";
 import { SpeechBubble } from "@/components/ui/speech-bubble";
@@ -29,92 +42,142 @@ export default async function HomePage() {
   const user = await requireUser();
   const isMod = user.role === "admin" || user.role === "instructor";
 
+  // userDetail carries the user's primary cohort. The "members of a cohort"
+  // relation in Prisma ("CohortMembers") is the single-FK User.cohortId, so
+  // "cohorts whose members include me" == { user.cohortId }. We fetch this
+  // first, then scope the cohort-dependent queries by that id.
+  const userDetail = await db.query.user.findFirst({
+    where: eq(userTable.id, user.id),
+    with: {
+      cohort: { columns: { id: true, name: true, description: true } },
+    },
+  });
+  const myCohortId = userDetail?.cohort?.id ?? null;
+
   const [
-    userDetail,
-    teamMembership,
-    cohortPosts,
-    recentWallPosts,
+    teamMembershipRaw,
+    cohortPostsRaw,
+    recentWallPostsRaw,
     pendingWallCount,
     pendingSubmissionsCount,
     cohortMemberCount,
     lessonsDone,
     badgesEarned,
-    nextLesson,
+    nextLessonRaw,
   ] = await Promise.all([
-    prisma.user.findUnique({
-      where: { id: user.id },
-      include: {
-        cohort: { select: { id: true, name: true, description: true } },
-      },
-    }),
-    prisma.teamMember.findUnique({
-      where: { userId: user.id },
-      include: {
+    db.query.teamMember.findFirst({
+      where: eq(teamMember.userId, user.id),
+      with: {
         team: {
-          include: {
-            members: {
-              include: {
-                user: { select: { id: true, name: true, email: true } },
+          with: {
+            teamMembers: {
+              with: {
+                user: { columns: { id: true, name: true, email: true } },
               },
-              orderBy: { joinedAt: "asc" },
+              orderBy: (m, { asc }) => [asc(m.joinedAt)],
             },
-            submission: { select: { id: true, locked: true } },
-            cohort: { select: { id: true, name: true } },
+            submissions: { columns: { id: true, locked: true } },
+            cohort: { columns: { id: true, name: true } },
           },
         },
       },
     }),
-    prisma.cohortPost.findMany({
-      where: { cohort: { members: { some: { id: user.id } } } },
-      orderBy: [{ pinned: "desc" }, { createdAt: "desc" }],
-      take: 4,
-      include: {
-        author: { select: { name: true, email: true, handle: true } },
-        cohort: { select: { id: true, name: true } },
-      },
-    }),
-    prisma.wallPost.findMany({
-      where: { approved: true },
-      orderBy: { createdAt: "desc" },
-      take: 6,
-      include: { author: { select: { name: true, email: true } } },
-    }),
-    isMod
-      ? prisma.wallPost.count({ where: { approved: false, rejected: false } })
-      : Promise.resolve(0),
-    isMod
-      ? prisma.submission.count({
-          where: { scores: { none: { judgeId: user.id } } },
+    myCohortId
+      ? db.query.cohortPost.findMany({
+          where: eq(cohortPost.cohortId, myCohortId),
+          orderBy: [desc(cohortPost.pinned), desc(cohortPost.createdAt)],
+          limit: 4,
+          with: {
+            user: { columns: { name: true, email: true, handle: true } },
+            cohort: { columns: { id: true, name: true } },
+          },
         })
+      : Promise.resolve([]),
+    db.query.wallPost.findMany({
+      where: eq(wallPost.approved, true),
+      orderBy: [desc(wallPost.createdAt)],
+      limit: 6,
+      with: { user_authorId: { columns: { name: true, email: true } } },
+    }),
+    isMod
+      ? db.$count(
+          wallPost,
+          and(eq(wallPost.approved, false), eq(wallPost.rejected, false)),
+        )
       : Promise.resolve(0),
-    prisma.user.count({
-      where: { cohort: { members: { some: { id: user.id } } } },
-    }),
-    prisma.progress.count({
-      where: { userId: user.id, completed: true },
-    }),
-    prisma.earnedBadge.count({
-      where: { userId: user.id },
-    }),
+    isMod
+      ? // Submissions not yet scored by this judge.
+        db.$count(
+          submission,
+          sql`NOT EXISTS (SELECT 1 FROM ${score} WHERE ${score.submissionId} = ${submission.id} AND ${score.judgeId} = ${user.id})`,
+        )
+      : Promise.resolve(0),
+    myCohortId
+      ? db.$count(userTable, eq(userTable.cohortId, myCohortId))
+      : Promise.resolve(0),
+    db.$count(
+      progress,
+      and(eq(progress.userId, user.id), eq(progress.completed, true)),
+    ),
+    db.$count(earnedBadge, eq(earnedBadge.userId, user.id)),
     // First unfinished lesson — across every chapter this user can see.
-    prisma.lesson
-      .findFirst({
-        where: {
-          published: true,
-          module: { published: true },
-          progress: {
-            none: { userId: user.id, completed: true },
-          },
-        },
-        orderBy: [{ module: { order: "asc" } }, { order: "asc" }],
-        select: {
-          id: true,
-          title: true,
-          module: { select: { title: true } },
-        },
+    // Joined to Module so we can order by module.order then lesson.order
+    // (the relational query API can't order by a related table's column).
+    db
+      .select({
+        id: lesson.id,
+        title: lesson.title,
+        moduleTitle: moduleTable.title,
       })
+      .from(lesson)
+      .innerJoin(moduleTable, eq(moduleTable.id, lesson.moduleId))
+      .where(
+        and(
+          eq(lesson.published, true),
+          eq(moduleTable.published, true),
+          sql`NOT EXISTS (SELECT 1 FROM ${progress} WHERE ${progress.lessonId} = ${lesson.id} AND ${progress.userId} = ${user.id} AND ${progress.completed} = true)`,
+        ),
+      )
+      .orderBy(asc(moduleTable.order), asc(lesson.order))
+      .limit(1)
+      .then((rows) => rows[0] ?? null)
       .catch(() => null),
   ]);
+
+  // Map Drizzle relation names back to the keys the JSX expects:
+  //   team.teamMembers  → team.members
+  //   team.submissions[] (many, unique teamId) → team.submission (one | null)
+  //   cohortPost.user   → cohortPost.author
+  //   wallPost.user_authorId → wallPost.author
+  const teamMembership = teamMembershipRaw
+    ? {
+        ...teamMembershipRaw,
+        team: {
+          ...teamMembershipRaw.team,
+          members: teamMembershipRaw.team.teamMembers,
+          submission: teamMembershipRaw.team.submissions[0] ?? null,
+        },
+      }
+    : null;
+
+  const cohortPosts = cohortPostsRaw.map((p) => ({
+    ...p,
+    author: p.user,
+  }));
+
+  const recentWallPosts = recentWallPostsRaw.map((p) => ({
+    ...p,
+    author: p.user_authorId,
+  }));
+
+  // Re-nest the joined module title so JSX can read nextLesson.module.title.
+  const nextLesson = nextLessonRaw
+    ? {
+        id: nextLessonRaw.id,
+        title: nextLessonRaw.title,
+        module: { title: nextLessonRaw.moduleTitle },
+      }
+    : null;
 
   const wallUrls = await signedWallImageUrls(
     recentWallPosts

@@ -1,7 +1,16 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { and, eq, ne } from "drizzle-orm";
 import { requireUser } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import {
+  db,
+  cohort as cohortTable,
+  cohortPost,
+  progress,
+  team,
+  teamMember,
+  workshopModule,
+} from "@/lib/db";
 import {
   createCohortPost,
   deleteCohortPost,
@@ -57,34 +66,37 @@ export default async function WorkshopPage({
   const { id } = await params;
 
   const [
-    cohort,
+    cohortRaw,
     posts,
     modules,
     completedLessonIds,
-    projects,
+    projectsRaw,
     hackathonConfig,
-    myHackathonMembership,
+    myTeamMemberships,
   ] = await Promise.all([
-      prisma.cohort.findUnique({
-        where: { id },
-        include: {
-          members: {
-            select: {
+      db.query.cohort.findFirst({
+        where: eq(cohortTable.id, id),
+        with: {
+          // Primary members: User.cohortId === id (relation `users`).
+          users: {
+            columns: {
               id: true,
               email: true,
               name: true,
               handle: true,
-              earnedBadges: {
-                include: {
-                  badge: { select: { name: true, icon: true, tone: true } },
+            },
+            with: {
+              earnedBadges_userId: {
+                with: {
+                  badge: { columns: { name: true, icon: true, tone: true } },
                 },
-                orderBy: { earnedAt: "desc" },
-                take: 6,
+                orderBy: (eb, { desc }) => [desc(eb.earnedAt)],
+                limit: 6,
               },
-              teamMembership: {
-                select: {
+              teamMembers: {
+                with: {
                   team: {
-                    select: {
+                    columns: {
                       id: true,
                       name: true,
                       projectTitle: true,
@@ -94,33 +106,37 @@ export default async function WorkshopPage({
                 },
               },
             },
-            orderBy: [{ name: "asc" }, { email: "asc" }],
+            orderBy: (u, { asc }) => [asc(u.name), asc(u.email)],
           },
           // Secondary members: people enrolled via UserCohort whose primary
           // workshop is different. Surfaces them in the workshop roster so
-          // the view matches the admin "Also enrolled" UI.
-          memberships: {
-            where: { user: { cohortId: { not: id } } },
-            include: {
+          // the view matches the admin "Also enrolled" UI. (relation
+          // `userCohorts`; the `user.cohortId !== id` filter is applied in JS
+          // since Drizzle can't filter a relation by a nested relation column.)
+          userCohorts: {
+            with: {
               user: {
-                select: {
+                columns: {
                   id: true,
                   email: true,
                   name: true,
                   handle: true,
-                  earnedBadges: {
-                    include: {
+                  cohortId: true,
+                },
+                with: {
+                  earnedBadges_userId: {
+                    with: {
                       badge: {
-                        select: { name: true, icon: true, tone: true },
+                        columns: { name: true, icon: true, tone: true },
                       },
                     },
-                    orderBy: { earnedAt: "desc" },
-                    take: 6,
+                    orderBy: (eb, { desc }) => [desc(eb.earnedAt)],
+                    limit: 6,
                   },
-                  teamMembership: {
-                    select: {
+                  teamMembers: {
+                    with: {
                       team: {
-                        select: {
+                        columns: {
                           id: true,
                           name: true,
                           projectTitle: true,
@@ -135,31 +151,38 @@ export default async function WorkshopPage({
           },
         },
       }),
-      prisma.cohortPost.findMany({
-        where: { cohortId: id },
-        include: {
-          author: {
-            select: { id: true, name: true, email: true, handle: true },
+      db.query.cohortPost
+        .findMany({
+          where: eq(cohortPost.cohortId, id),
+          with: {
+            // relation is `user`; JSX reads `p.author`, remapped below.
+            user: {
+              columns: { id: true, name: true, email: true, handle: true },
+            },
           },
-        },
-        orderBy: [{ pinned: "desc" }, { createdAt: "desc" }],
-        take: 30,
-      }),
+          orderBy: (p, { desc }) => [desc(p.pinned), desc(p.createdAt)],
+          limit: 30,
+        })
+        .then((rows) =>
+          rows.map(({ user, ...rest }) => ({ ...rest, author: user })),
+        ),
       // Lessons attached to THIS workshop via the WorkshopModule join.
       // The library (Module + Lesson) is global; this query honors the
       // per-workshop selection + ordering. .then() flattens the join rows
       // back to plain Module[] so the existing render code stays untouched.
-      prisma.workshopModule
+      // The `module.published` gate is applied in JS (Drizzle can't filter a
+      // relation by a nested relation column in `where`).
+      db.query.workshopModule
         .findMany({
-          where: { cohortId: id, module: { published: true } },
-          orderBy: { order: "asc" },
-          include: {
+          where: eq(workshopModule.cohortId, id),
+          orderBy: (wm, { asc }) => [asc(wm.order)],
+          with: {
             module: {
-              include: {
+              with: {
                 lessons: {
-                  where: { published: true },
-                  orderBy: { order: "asc" },
-                  select: {
+                  where: (l, { eq }) => eq(l.published, true),
+                  orderBy: (l, { asc }) => [asc(l.order)],
+                  columns: {
                     id: true,
                     title: true,
                     summary: true,
@@ -172,14 +195,16 @@ export default async function WorkshopPage({
             },
           },
         })
-        .then((rows) => rows.map((r) => r.module)),
-      prisma.progress.findMany({
-        where: { userId: me.id, completed: true },
-        select: { lessonId: true },
+        .then((rows) =>
+          rows.map((r) => r.module).filter((m) => m.published),
+        ),
+      db.query.progress.findMany({
+        where: and(eq(progress.userId, me.id), eq(progress.completed, true)),
+        columns: { lessonId: true },
       }),
-      prisma.team.findMany({
-        where: { cohortId: id, status: { not: "archived" } },
-        select: {
+      db.query.team.findMany({
+        where: and(eq(team.cohortId, id), ne(team.status, "archived")),
+        columns: {
           id: true,
           name: true,
           projectTitle: true,
@@ -187,27 +212,102 @@ export default async function WorkshopPage({
           tags: true,
           featured: true,
           status: true,
-          _count: { select: { members: true, buildLogEntries: true } },
         },
-        orderBy: [{ featured: "desc" }, { updatedAt: "desc" }],
+        with: {
+          // For the `_count` of members + build logs shown on each card.
+          teamMembers: { columns: { id: true } },
+          buildLogEntries: { columns: { id: true } },
+        },
+        orderBy: (t, { desc }) => [desc(t.featured), desc(t.updatedAt)],
       }),
       getHackathonConfig(id),
-      // User's hackathon team _in this specific cohort_ — for the CTA below.
-      prisma.teamMember.findFirst({
-        where: { userId: me.id, team: { cohortId: id } },
-        select: {
+      // User's hackathon team(s) — filtered to _this specific cohort_ in JS
+      // below (Prisma filtered via `team: { cohortId: id }`). A user has at
+      // most one team membership (unique userId), so this is 0 or 1 row.
+      db.query.teamMember.findMany({
+        where: eq(teamMember.userId, me.id),
+        columns: {
           teamId: true,
           isCaptain: true,
+        },
+        with: {
           team: {
-            select: {
+            columns: {
               name: true,
-              submission: { select: { id: true } },
+              cohortId: true,
+            },
+            with: {
+              submissions: { columns: { id: true } },
             },
           },
         },
       }),
     ]);
-  if (!cohort) notFound();
+  if (!cohortRaw) notFound();
+
+  // Remap Drizzle relation names back to the keys the JSX expects:
+  //   users               → members         earnedBadges_userId → earnedBadges
+  //   userCohorts         → memberships     teamMembers[0]      → teamMembership
+  //   submissions[0]      → submission
+  const mapMember = (u: {
+    id: string;
+    email: string;
+    name: string | null;
+    handle: string | null;
+    earnedBadges_userId: {
+      id: string;
+      badge: { name: string; icon: string; tone: string };
+    }[];
+    teamMembers: {
+      team: {
+        id: string;
+        name: string;
+        projectTitle: string | null;
+        cohortId: string | null;
+      };
+    }[];
+  }) => ({
+    id: u.id,
+    email: u.email,
+    name: u.name,
+    handle: u.handle,
+    earnedBadges: u.earnedBadges_userId,
+    teamMembership: u.teamMembers[0] ?? null,
+  });
+
+  const cohort = {
+    ...cohortRaw,
+    members: cohortRaw.users.map(mapMember),
+    memberships: cohortRaw.userCohorts
+      .filter((row) => row.user.cohortId !== id)
+      .map((row) => ({ ...row, user: mapMember(row.user) })),
+  };
+
+  // `_count` parity for the team cards.
+  const projects = projectsRaw.map((p) => ({
+    ...p,
+    tags: p.tags ?? [],
+    _count: {
+      members: p.teamMembers.length,
+      buildLogEntries: p.buildLogEntries.length,
+    },
+  }));
+
+  // Collapse the user's team memberships to the one in THIS cohort (or null),
+  // and reshape `submissions[0]` → `submission` for the CTA.
+  const myMembershipRow = myTeamMemberships.find(
+    (tm) => tm.team.cohortId === id,
+  );
+  const myHackathonMembership = myMembershipRow
+    ? {
+        teamId: myMembershipRow.teamId,
+        isCaptain: myMembershipRow.isCaptain,
+        team: {
+          name: myMembershipRow.team.name,
+          submission: myMembershipRow.team.submissions[0] ?? null,
+        },
+      }
+    : null;
 
   const isPrimaryMember = cohort.members.some((m) => m.id === me.id);
   const isSecondaryMember = cohort.memberships.some(

@@ -1,6 +1,7 @@
 import Link from "next/link";
+import { and, desc, eq, isNull, ne, or } from "drizzle-orm";
 import { requireUser } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { db, conversation, directMessage } from "@/lib/db";
 
 export const metadata = { title: "Messages · Karya Sanga" };
 
@@ -15,48 +16,55 @@ export const metadata = { title: "Messages · Karya Sanga" };
 export default async function MessagesInboxPage() {
   const me = await requireUser();
 
-  const conversations = await prisma.conversation.findMany({
-    where: {
-      OR: [{ userAId: me.id }, { userBId: me.id }],
-    },
-    orderBy: { lastMessageAt: "desc" },
-    include: {
-      userA: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          handle: true,
-        },
+  const conversationsRaw = await db.query.conversation.findMany({
+    where: or(
+      eq(conversation.userAid, me.id),
+      eq(conversation.userBid, me.id),
+    ),
+    orderBy: [desc(conversation.lastMessageAt)],
+    with: {
+      user_userAid: {
+        columns: { id: true, name: true, email: true, handle: true },
       },
-      userB: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          handle: true,
-        },
+      user_userBid: {
+        columns: { id: true, name: true, email: true, handle: true },
       },
-      messages: {
-        orderBy: { createdAt: "desc" },
-        take: 1,
-        select: {
+      directMessages: {
+        orderBy: (m, { desc }) => [desc(m.createdAt)],
+        limit: 1,
+        columns: {
           authorId: true,
           body: true,
           createdAt: true,
           readAt: true,
         },
       },
-      _count: {
-        select: {
-          messages: {
-            where: { readAt: null, NOT: { authorId: me.id } },
-          },
-        },
-      },
     },
-    take: 100,
+    limit: 100,
   });
+
+  // Map relation names → the keys the JSX reads (userA, userB, messages) and
+  // compute the unread count (other party's unread messages) per conversation.
+  // _count.messages was a filtered relation count in Prisma.
+  const conversations = await Promise.all(
+    conversationsRaw.map(async (c) => {
+      const unread = await db.$count(
+        directMessage,
+        and(
+          eq(directMessage.conversationId, c.id),
+          isNull(directMessage.readAt),
+          ne(directMessage.authorId, me.id),
+        ),
+      );
+      return {
+        ...c,
+        userA: c.user_userAid,
+        userB: c.user_userBid,
+        messages: c.directMessages,
+        _count: { messages: unread },
+      };
+    }),
+  );
 
   return (
     <main className="mx-auto w-full max-w-[820px] flex-1 px-4 md:px-8 py-10">

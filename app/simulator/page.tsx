@@ -1,6 +1,7 @@
 import Link from "next/link";
+import { asc, desc, eq } from "drizzle-orm";
 import { requireUser } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { db, savedProject, wokwiStarter } from "@/lib/db";
 import { COMPONENT_CATALOG } from "@/lib/components-catalog";
 import { DeleteSavedProject } from "@/components/simulator/delete-saved-project";
 import { SaveProjectForm } from "@/components/simulator/save-project-form";
@@ -70,13 +71,13 @@ export default async function SimulatorPage() {
   const isMod = user.role === "admin" || user.role === "instructor";
 
   const [savedProjects, starters] = await Promise.all([
-    prisma.savedProject.findMany({
-      where: { ownerId: user.id },
-      orderBy: { createdAt: "desc" },
+    db.query.savedProject.findMany({
+      where: eq(savedProject.ownerId, user.id),
+      orderBy: [desc(savedProject.createdAt)],
     }),
-    prisma.wokwiStarter.findMany({
-      where: { published: true },
-      orderBy: [{ order: "asc" }, { createdAt: "asc" }],
+    db.query.wokwiStarter.findMany({
+      where: eq(wokwiStarter.published, true),
+      orderBy: [asc(wokwiStarter.order), asc(wokwiStarter.createdAt)],
     }),
   ]);
 

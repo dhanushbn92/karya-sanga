@@ -1,6 +1,7 @@
 import Link from "next/link";
+import { eq } from "drizzle-orm";
 import { requireUser } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { db, user } from "@/lib/db";
 import { updateMyProfile } from "@/lib/actions/alumni";
 import { ChangePasswordForm } from "@/components/auth/change-password-form";
 
@@ -8,7 +9,7 @@ export const metadata = { title: "Edit profile · Karya Sanga" };
 
 export default async function ProfileSettingsPage() {
   const me = await requireUser();
-  const full = await prisma.user.findUnique({ where: { id: me.id } });
+  const full = await db.query.user.findFirst({ where: eq(user.id, me.id) });
   if (!full) throw new Error("User row missing");
 
   return (

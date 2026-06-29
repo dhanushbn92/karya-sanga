@@ -3,7 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { prisma } from "@/lib/prisma";
+import { and, asc, desc, eq } from "drizzle-orm";
+import { createId } from "@paralleldrive/cuid2";
+import { db, module, lesson, workshopModule } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
 import { deleteLessonSlide } from "@/lib/supabase/admin";
 
@@ -51,10 +53,10 @@ export async function createModule(formData: FormData): Promise<void> {
     fail(parsed.error.issues[0]?.message ?? "Invalid input");
   }
 
-  const created = await prisma.module.create({
-    data: parsed.data,
-    select: { id: true },
-  });
+  const [created] = await db
+    .insert(module)
+    .values({ id: createId(), ...parsed.data, updatedAt: new Date() })
+    .returning({ id: module.id });
   revalidatePath("/admin/modules");
   revalidatePath("/lessons");
   redirect(`/admin/modules/${created.id}`);
@@ -77,10 +79,10 @@ export async function updateModule(formData: FormData): Promise<void> {
     fail(parsed.error.issues[0]?.message ?? "Invalid input");
   }
   const { id, ...rest } = parsed.data;
-  await prisma.module.update({
-    where: { id },
-    data: { ...rest, description: rest.description || null },
-  });
+  await db
+    .update(module)
+    .set({ ...rest, description: rest.description || null, updatedAt: new Date() })
+    .where(eq(module.id, id));
   revalidatePath("/admin/modules");
   revalidatePath(`/admin/modules/${id}`);
   revalidatePath("/lessons");
@@ -90,7 +92,7 @@ export async function deleteModule(formData: FormData): Promise<void> {
   await requireRole(["admin", "instructor"]);
   const id = String(formData.get("id") ?? "");
   if (!id) fail("Missing id");
-  await prisma.module.delete({ where: { id } });
+  await db.delete(module).where(eq(module.id, id));
   revalidatePath("/admin/modules");
   revalidatePath("/lessons");
   redirect("/admin/modules");
@@ -132,14 +134,14 @@ export async function createLesson(formData: FormData): Promise<void> {
     fail(parsed.error.issues[0]?.message ?? "Invalid input");
   }
 
-  await prisma.lesson.create({
-    data: {
-      ...parsed.data,
-      wokwiProjectUrl: parsed.data.wokwiProjectUrl || null,
-      slidesUrl: parsed.data.slidesUrl || null,
-      difficulty: parsed.data.difficulty || null,
-      summary: parsed.data.summary || null,
-    },
+  await db.insert(lesson).values({
+    id: createId(),
+    ...parsed.data,
+    wokwiProjectUrl: parsed.data.wokwiProjectUrl || null,
+    slidesUrl: parsed.data.slidesUrl || null,
+    difficulty: parsed.data.difficulty || null,
+    summary: parsed.data.summary || null,
+    updatedAt: new Date(),
   });
   revalidatePath(`/admin/modules/${parsed.data.moduleId}`);
   revalidatePath("/lessons");
@@ -167,16 +169,17 @@ export async function updateLesson(formData: FormData): Promise<void> {
     fail(parsed.error.issues[0]?.message ?? "Invalid input");
   }
   const { id, ...rest } = parsed.data;
-  await prisma.lesson.update({
-    where: { id },
-    data: {
+  await db
+    .update(lesson)
+    .set({
       ...rest,
       wokwiProjectUrl: rest.wokwiProjectUrl || null,
       slidesUrl: rest.slidesUrl || null,
       difficulty: rest.difficulty || null,
       summary: rest.summary || null,
-    },
-  });
+      updatedAt: new Date(),
+    })
+    .where(eq(lesson.id, id));
   revalidatePath(`/admin/modules/${rest.moduleId}`);
   revalidatePath(`/lessons/${id}`);
   revalidatePath("/lessons");
@@ -188,11 +191,11 @@ export async function deleteLesson(formData: FormData): Promise<void> {
   const moduleId = String(formData.get("moduleId") ?? "");
   if (!id) fail("Missing id");
   // Pull the slide path so we can clean up storage in the same pass.
-  const existing = await prisma.lesson.findUnique({
-    where: { id },
-    select: { slideFilePath: true },
+  const existing = await db.query.lesson.findFirst({
+    where: eq(lesson.id, id),
+    columns: { slideFilePath: true },
   });
-  await prisma.lesson.delete({ where: { id } });
+  await db.delete(lesson).where(eq(lesson.id, id));
   if (existing?.slideFilePath) {
     await deleteLessonSlide(existing.slideFilePath).catch(() => {});
   }
@@ -251,20 +254,21 @@ export async function attachSlideFile(formData: FormData): Promise<void> {
   }
 
   // If the lesson already had a slide file, clean up the old object.
-  const existing = await prisma.lesson.findUnique({
-    where: { id: parsed.data.lessonId },
-    select: { slideFilePath: true, moduleId: true },
+  const existing = await db.query.lesson.findFirst({
+    where: eq(lesson.id, parsed.data.lessonId),
+    columns: { slideFilePath: true, moduleId: true },
   });
   if (!existing) fail("Lesson not found");
 
-  await prisma.lesson.update({
-    where: { id: parsed.data.lessonId },
-    data: {
+  await db
+    .update(lesson)
+    .set({
       slideFilePath: parsed.data.slideFilePath,
       slideFileType: parsed.data.slideFileType,
       slideFileName: parsed.data.slideFileName,
-    },
-  });
+      updatedAt: new Date(),
+    })
+    .where(eq(lesson.id, parsed.data.lessonId));
 
   if (existing.slideFilePath && existing.slideFilePath !== parsed.data.slideFilePath) {
     await deleteLessonSlide(existing.slideFilePath).catch(() => {});
@@ -280,16 +284,21 @@ export async function removeSlideFile(formData: FormData): Promise<void> {
   await requireRole(["admin", "instructor"]);
   const lessonId = String(formData.get("lessonId") ?? "");
   if (!lessonId) fail("Missing lesson id");
-  const existing = await prisma.lesson.findUnique({
-    where: { id: lessonId },
-    select: { slideFilePath: true, moduleId: true },
+  const existing = await db.query.lesson.findFirst({
+    where: eq(lesson.id, lessonId),
+    columns: { slideFilePath: true, moduleId: true },
   });
   if (!existing) fail("Lesson not found");
 
-  await prisma.lesson.update({
-    where: { id: lessonId },
-    data: { slideFilePath: null, slideFileType: null, slideFileName: null },
-  });
+  await db
+    .update(lesson)
+    .set({
+      slideFilePath: null,
+      slideFileType: null,
+      slideFileName: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(lesson.id, lessonId));
   if (existing.slideFilePath) {
     await deleteLessonSlide(existing.slideFilePath).catch(() => {});
   }
@@ -324,18 +333,19 @@ export async function attachModuleToCohort(
   if (!parsed.success) throw new Error("Invalid input");
   const { cohortId, moduleId } = parsed.data;
 
-  const last = await prisma.workshopModule.findFirst({
-    where: { cohortId },
-    orderBy: { order: "desc" },
-    select: { order: true },
+  const last = await db.query.workshopModule.findFirst({
+    where: eq(workshopModule.cohortId, cohortId),
+    orderBy: [desc(workshopModule.order)],
+    columns: { order: true },
   });
   const nextOrder = (last?.order ?? -1) + 1;
 
-  await prisma.workshopModule.upsert({
-    where: { cohortId_moduleId: { cohortId, moduleId } },
-    create: { cohortId, moduleId, order: nextOrder },
-    update: {}, // already attached — no-op
-  });
+  await db
+    .insert(workshopModule)
+    .values({ id: createId(), cohortId, moduleId, order: nextOrder })
+    .onConflictDoNothing({
+      target: [workshopModule.cohortId, workshopModule.moduleId],
+    });
 
   revalidatePath(`/admin/cohorts/${cohortId}`);
   revalidatePath(`/cohorts/${cohortId}`);
@@ -353,9 +363,14 @@ export async function detachModuleFromCohort(
   if (!parsed.success) throw new Error("Invalid input");
   const { cohortId, moduleId } = parsed.data;
 
-  await prisma.workshopModule.deleteMany({
-    where: { cohortId, moduleId },
-  });
+  await db
+    .delete(workshopModule)
+    .where(
+      and(
+        eq(workshopModule.cohortId, cohortId),
+        eq(workshopModule.moduleId, moduleId),
+      ),
+    );
 
   revalidatePath(`/admin/cohorts/${cohortId}`);
   revalidatePath(`/cohorts/${cohortId}`);
@@ -384,10 +399,10 @@ export async function moveAttachedModule(
   if (!parsed.success) throw new Error("Invalid input");
   const { cohortId, moduleId, direction } = parsed.data;
 
-  const items = await prisma.workshopModule.findMany({
-    where: { cohortId },
-    orderBy: { order: "asc" },
-    select: { id: true, moduleId: true, order: true },
+  const items = await db.query.workshopModule.findMany({
+    where: eq(workshopModule.cohortId, cohortId),
+    orderBy: [asc(workshopModule.order)],
+    columns: { id: true, moduleId: true, order: true },
   });
   const idx = items.findIndex((r) => r.moduleId === moduleId);
   if (idx === -1) return;
@@ -396,16 +411,16 @@ export async function moveAttachedModule(
 
   const a = items[idx];
   const b = items[swapIdx];
-  await prisma.$transaction([
-    prisma.workshopModule.update({
-      where: { id: a.id },
-      data: { order: b.order },
-    }),
-    prisma.workshopModule.update({
-      where: { id: b.id },
-      data: { order: a.order },
-    }),
-  ]);
+  await db.transaction(async (tx) => {
+    await tx
+      .update(workshopModule)
+      .set({ order: b.order })
+      .where(eq(workshopModule.id, a.id));
+    await tx
+      .update(workshopModule)
+      .set({ order: a.order })
+      .where(eq(workshopModule.id, b.id));
+  });
 
   revalidatePath(`/admin/cohorts/${cohortId}`);
   revalidatePath(`/cohorts/${cohortId}`);

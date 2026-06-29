@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireRole } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
 import {
   createStarter,
   deleteStarter,
@@ -13,8 +13,8 @@ export const metadata = { title: "Starters · Admin" };
 export default async function StartersAdminPage() {
   await requireRole(["admin", "instructor"]);
 
-  const starters = await prisma.wokwiStarter.findMany({
-    orderBy: [{ order: "asc" }, { createdAt: "asc" }],
+  const starters = await db.query.wokwiStarter.findMany({
+    orderBy: (s, { asc }) => [asc(s.order), asc(s.createdAt)],
   });
 
   return (

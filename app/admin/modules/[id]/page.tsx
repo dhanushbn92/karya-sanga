@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { eq } from "drizzle-orm";
 import { requireRole } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { db, module as moduleTable } from "@/lib/db";
 import {
   createLesson,
   deleteModule,
@@ -19,10 +20,10 @@ export default async function ModuleEditPage({
   const me = await requireRole(["admin", "instructor"]);
   const { id } = await params;
 
-  const mod = await prisma.module.findUnique({
-    where: { id },
-    include: {
-      lessons: { orderBy: { order: "asc" } },
+  const mod = await db.query.module.findFirst({
+    where: eq(moduleTable.id, id),
+    with: {
+      lessons: { orderBy: (l, { asc }) => [asc(l.order)] },
     },
   });
   if (!mod) notFound();

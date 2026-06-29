@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
-import { prisma } from "@/lib/prisma";
+import { asc, desc, eq } from "drizzle-orm";
+import { db, cohort, wallPost, badge, team, user } from "@/lib/db";
 import { signedWallImageUrls } from "@/lib/supabase/admin";
 
 export const metadata = {
@@ -31,27 +32,36 @@ export const metadata = {
  *   8. Final CTA + footer
  */
 export default async function LandingPage() {
-  const [cohorts, recentWall, badges, teamCount, builderCount] =
+  const [cohortRows, recentWall, badges, teamCount, builderCount] =
     await Promise.all([
-      prisma.cohort.findMany({
-        orderBy: [{ current: "desc" }, { startedOn: "desc" }],
-        include: {
-          _count: { select: { members: true, projects: true } },
-        },
-        take: 6,
+      db.query.cohort.findMany({
+        orderBy: [desc(cohort.current), desc(cohort.startedOn)],
+        limit: 6,
       }),
-      prisma.wallPost.findMany({
-        where: { approved: true },
-        orderBy: { createdAt: "desc" },
-        take: 6,
+      db.query.wallPost.findMany({
+        where: eq(wallPost.approved, true),
+        orderBy: [desc(wallPost.createdAt)],
+        limit: 6,
       }),
-      prisma.badge.findMany({
-        orderBy: [{ category: "asc" }, { order: "asc" }],
-        take: 17,
+      db.query.badge.findMany({
+        orderBy: [asc(badge.category), asc(badge.order)],
+        limit: 17,
       }),
-      prisma.team.count(),
-      prisma.user.count(),
+      db.$count(team),
+      db.$count(user),
     ]);
+
+  // _count.members (User.cohortId FK → relation "users") and _count.projects
+  // (Team.cohortId FK → relation "teams") via correlated counts per cohort.
+  const cohorts = await Promise.all(
+    cohortRows.map(async (c) => {
+      const [members, projects] = await Promise.all([
+        db.$count(user, eq(user.cohortId, c.id)),
+        db.$count(team, eq(team.cohortId, c.id)),
+      ]);
+      return { ...c, _count: { members, projects } };
+    }),
+  );
 
   const wallUrls = await signedWallImageUrls(
     recentWall.map((p) => p.imagePath).filter((p): p is string => !!p),

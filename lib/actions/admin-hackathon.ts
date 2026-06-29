@@ -3,7 +3,16 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { prisma } from "@/lib/prisma";
+import { and, asc, eq, inArray, ne } from "drizzle-orm";
+import { createId } from "@paralleldrive/cuid2";
+import {
+  db,
+  hackathonConfig,
+  team,
+  teamMember,
+  lookingForTeam,
+  user,
+} from "@/lib/db";
 import { requireRole } from "@/lib/auth";
 
 /**
@@ -19,12 +28,14 @@ import { requireRole } from "@/lib/auth";
  */
 
 async function getMaxTeamSize() {
-  const cfg = await prisma.hackathonConfig.upsert({
-    where: { id: "default" },
-    create: { id: "default" },
-    update: {},
-    select: { maxTeamSize: true },
-  });
+  const [cfg] = await db
+    .insert(hackathonConfig)
+    .values({ id: "default", updatedAt: new Date() })
+    .onConflictDoUpdate({
+      target: hackathonConfig.id,
+      set: { id: "default" },
+    })
+    .returning({ maxTeamSize: hackathonConfig.maxTeamSize });
   return cfg.maxTeamSize;
 }
 
@@ -73,9 +84,9 @@ export async function adminCreateTeamWithMembers(
 
   // Look up all users in one go; flag missing ones for the caller.
   const users = emails.length
-    ? await prisma.user.findMany({
-        where: { email: { in: emails } },
-        select: { id: true, email: true },
+    ? await db.query.user.findMany({
+        where: inArray(user.email, emails),
+        columns: { id: true, email: true },
       })
     : [];
 
@@ -90,9 +101,12 @@ export async function adminCreateTeamWithMembers(
 
   // None of these users may already be on a team — keep one-team-per-user.
   if (users.length > 0) {
-    const existing = await prisma.teamMember.findMany({
-      where: { userId: { in: users.map((u) => u.id) } },
-      include: { user: { select: { email: true } } },
+    const existing = await db.query.teamMember.findMany({
+      where: inArray(
+        teamMember.userId,
+        users.map((u) => u.id),
+      ),
+      with: { user: { columns: { email: true } } },
     });
     if (existing.length > 0) {
       throw new Error(
@@ -110,32 +124,41 @@ export async function adminCreateTeamWithMembers(
     throw new Error(`Captain ${captainEmail} isn't in the member list.`);
   }
 
-  const team = await prisma.team.create({
-    data: {
+  const teamId = createId();
+  await db.transaction(async (tx) => {
+    await tx.insert(team).values({
+      id: teamId,
       name: parsed.data.name,
       description: parsed.data.description || null,
       lookingForMembers: users.length < maxSize,
-      members: {
-        create: users.map((u) => ({
+      updatedAt: new Date(),
+    });
+    if (users.length > 0) {
+      await tx.insert(teamMember).values(
+        users.map((u) => ({
+          id: createId(),
+          teamId,
           userId: u.id,
           isCaptain: u.id === captainUserId,
         })),
-      },
-    },
-    select: { id: true },
+      );
+    }
   });
 
   // Clear any "looking for team" posts for placed users.
   if (users.length > 0) {
-    await prisma.lookingForTeam.deleteMany({
-      where: { userId: { in: users.map((u) => u.id) } },
-    });
+    await db.delete(lookingForTeam).where(
+      inArray(
+        lookingForTeam.userId,
+        users.map((u) => u.id),
+      ),
+    );
   }
 
   revalidatePath("/admin/hackathon");
   revalidatePath("/admin/hackathon/teams");
   revalidatePath("/hackathon");
-  redirect(`/admin/hackathon/teams?team=${team.id}#team-${team.id}`);
+  redirect(`/admin/hackathon/teams?team=${teamId}#team-${teamId}`);
 }
 
 const renameSchema = z.object({
@@ -154,13 +177,14 @@ export async function adminRenameTeam(formData: FormData): Promise<void> {
   if (!parsed.success) {
     throw new Error(parsed.error.issues[0]?.message ?? "Invalid input");
   }
-  await prisma.team.update({
-    where: { id: parsed.data.teamId },
-    data: {
+  await db
+    .update(team)
+    .set({
       name: parsed.data.name,
       description: parsed.data.description || null,
-    },
-  });
+      updatedAt: new Date(),
+    })
+    .where(eq(team.id, parsed.data.teamId));
   revalidatePath("/admin/hackathon/teams");
   revalidatePath(`/hackathon/teams/${parsed.data.teamId}`);
   revalidatePath("/hackathon");
@@ -171,7 +195,7 @@ export async function adminDeleteTeam(formData: FormData): Promise<void> {
   const teamId = String(formData.get("teamId") ?? "");
   if (!teamId) throw new Error("Missing team id");
   // Cascade drops TeamMember + TeamWokwiLink + Submission rows.
-  await prisma.team.delete({ where: { id: teamId } });
+  await db.delete(team).where(eq(team.id, teamId));
   revalidatePath("/admin/hackathon/teams");
   revalidatePath("/admin/hackathon");
   revalidatePath("/hackathon");
@@ -198,23 +222,27 @@ export async function adminAddMember(formData: FormData): Promise<void> {
   }
 
   // Make sure the team exists and check capacity.
-  const team = await prisma.team.findUnique({
-    where: { id: parsed.data.teamId },
-    include: { _count: { select: { members: true } } },
+  const teamRow = await db.query.team.findFirst({
+    where: eq(team.id, parsed.data.teamId),
   });
-  if (!team) throw new Error("Team not found");
+  if (!teamRow) throw new Error("Team not found");
+
+  const memberCount = await db.$count(
+    teamMember,
+    eq(teamMember.teamId, teamRow.id),
+  );
 
   const maxSize = await getMaxTeamSize();
-  if (team._count.members >= maxSize) {
+  if (memberCount >= maxSize) {
     throw new Error(
       `Team is at the limit (${maxSize}). Bump the max in settings or remove someone first.`,
     );
   }
 
   // User must not already be on a team.
-  const existing = await prisma.teamMember.findUnique({
-    where: { userId: parsed.data.userId },
-    select: { teamId: true },
+  const existing = await db.query.teamMember.findFirst({
+    where: eq(teamMember.userId, parsed.data.userId),
+    columns: { teamId: true },
   });
   if (existing) {
     throw new Error(
@@ -224,24 +252,24 @@ export async function adminAddMember(formData: FormData): Promise<void> {
     );
   }
 
-  await prisma.teamMember.create({
-    data: {
-      teamId: parsed.data.teamId,
-      userId: parsed.data.userId,
-    },
+  await db.insert(teamMember).values({
+    id: createId(),
+    teamId: parsed.data.teamId,
+    userId: parsed.data.userId,
   });
 
   // Once added, auto-flip team off "open" if it just filled up.
-  if (team._count.members + 1 >= maxSize) {
-    await prisma.team.update({
-      where: { id: team.id },
-      data: { lookingForMembers: false },
-    });
+  if (memberCount + 1 >= maxSize) {
+    await db
+      .update(team)
+      .set({ lookingForMembers: false, updatedAt: new Date() })
+      .where(eq(team.id, teamRow.id));
   }
 
   // Remove any "looking for team" post they had.
-  await prisma.lookingForTeam
-    .delete({ where: { userId: parsed.data.userId } })
+  await db
+    .delete(lookingForTeam)
+    .where(eq(lookingForTeam.userId, parsed.data.userId))
     .catch(() => {});
 
   revalidatePath("/admin/hackathon/teams");
@@ -260,36 +288,44 @@ export async function adminRemoveMember(formData: FormData): Promise<void> {
   });
   if (!parsed.success) throw new Error("Missing member id");
 
-  const member = await prisma.teamMember.findUnique({
-    where: { id: parsed.data.memberId },
-    include: { team: { include: { _count: { select: { members: true } } } } },
+  const member = await db.query.teamMember.findFirst({
+    where: eq(teamMember.id, parsed.data.memberId),
+    with: { team: true },
   });
   if (!member) throw new Error("Member not found");
 
-  if (member.team._count.members === 1) {
+  const memberCount = await db.$count(
+    teamMember,
+    eq(teamMember.teamId, member.teamId),
+  );
+
+  if (memberCount === 1) {
     // Removing the last member deletes the team entirely.
-    await prisma.team.delete({ where: { id: member.teamId } });
+    await db.delete(team).where(eq(team.id, member.teamId));
   } else {
     if (member.isCaptain) {
       // Promote the next-oldest member.
-      const next = await prisma.teamMember.findFirst({
-        where: { teamId: member.teamId, NOT: { id: member.id } },
-        orderBy: { joinedAt: "asc" },
-        select: { id: true },
+      const next = await db.query.teamMember.findFirst({
+        where: and(
+          eq(teamMember.teamId, member.teamId),
+          ne(teamMember.id, member.id),
+        ),
+        orderBy: [asc(teamMember.joinedAt)],
+        columns: { id: true },
       });
       if (next) {
-        await prisma.teamMember.update({
-          where: { id: next.id },
-          data: { isCaptain: true },
-        });
+        await db
+          .update(teamMember)
+          .set({ isCaptain: true })
+          .where(eq(teamMember.id, next.id));
       }
     }
-    await prisma.teamMember.delete({ where: { id: member.id } });
+    await db.delete(teamMember).where(eq(teamMember.id, member.id));
     // Team has room again — make it discoverable.
-    await prisma.team.update({
-      where: { id: member.teamId },
-      data: { lookingForMembers: true },
-    });
+    await db
+      .update(team)
+      .set({ lookingForMembers: true, updatedAt: new Date() })
+      .where(eq(team.id, member.teamId));
   }
 
   revalidatePath("/admin/hackathon/teams");
@@ -310,69 +346,81 @@ export async function adminMoveMember(formData: FormData): Promise<void> {
   });
   if (!parsed.success) throw new Error("Invalid input");
 
-  const member = await prisma.teamMember.findUnique({
-    where: { id: parsed.data.memberId },
-    include: { team: { include: { _count: { select: { members: true } } } } },
+  const member = await db.query.teamMember.findFirst({
+    where: eq(teamMember.id, parsed.data.memberId),
+    with: { team: true },
   });
   if (!member) throw new Error("Member not found");
   if (member.teamId === parsed.data.toTeamId) return; // no-op
 
-  const destination = await prisma.team.findUnique({
-    where: { id: parsed.data.toTeamId },
-    include: { _count: { select: { members: true } } },
+  const fromMemberCount = await db.$count(
+    teamMember,
+    eq(teamMember.teamId, member.teamId),
+  );
+
+  const destination = await db.query.team.findFirst({
+    where: eq(team.id, parsed.data.toTeamId),
   });
   if (!destination) throw new Error("Destination team not found");
 
+  const destMemberCount = await db.$count(
+    teamMember,
+    eq(teamMember.teamId, destination.id),
+  );
+
   const maxSize = await getMaxTeamSize();
-  if (destination._count.members >= maxSize) {
+  if (destMemberCount >= maxSize) {
     throw new Error(`Destination team is at the limit (${maxSize}).`);
   }
 
   const fromTeamId = member.teamId;
-  const fromWasLast = member.team._count.members === 1;
+  const fromWasLast = fromMemberCount === 1;
 
-  await prisma.$transaction(async (tx) => {
+  await db.transaction(async (tx) => {
     // If captain was leaving and team has others, promote the next oldest.
     if (member.isCaptain && !fromWasLast) {
-      const next = await tx.teamMember.findFirst({
-        where: { teamId: fromTeamId, NOT: { id: member.id } },
-        orderBy: { joinedAt: "asc" },
-        select: { id: true },
+      const next = await tx.query.teamMember.findFirst({
+        where: and(
+          eq(teamMember.teamId, fromTeamId),
+          ne(teamMember.id, member.id),
+        ),
+        orderBy: [asc(teamMember.joinedAt)],
+        columns: { id: true },
       });
       if (next) {
-        await tx.teamMember.update({
-          where: { id: next.id },
-          data: { isCaptain: true },
-        });
+        await tx
+          .update(teamMember)
+          .set({ isCaptain: true })
+          .where(eq(teamMember.id, next.id));
       }
     }
 
     // Re-point the membership. We do an update rather than delete+create to
     // preserve the `joinedAt` timestamp and the unique-userId constraint.
-    await tx.teamMember.update({
-      where: { id: member.id },
-      data: {
+    await tx
+      .update(teamMember)
+      .set({
         teamId: parsed.data.toTeamId,
         isCaptain: false,
-      },
-    });
+      })
+      .where(eq(teamMember.id, member.id));
 
     // If origin team is now empty, delete it.
     if (fromWasLast) {
-      await tx.team.delete({ where: { id: fromTeamId } });
+      await tx.delete(team).where(eq(team.id, fromTeamId));
     } else {
-      await tx.team.update({
-        where: { id: fromTeamId },
-        data: { lookingForMembers: true },
-      });
+      await tx
+        .update(team)
+        .set({ lookingForMembers: true, updatedAt: new Date() })
+        .where(eq(team.id, fromTeamId));
     }
 
     // Destination may now be full → auto-close it.
-    if (destination._count.members + 1 >= maxSize) {
-      await tx.team.update({
-        where: { id: parsed.data.toTeamId },
-        data: { lookingForMembers: false },
-      });
+    if (destMemberCount + 1 >= maxSize) {
+      await tx
+        .update(team)
+        .set({ lookingForMembers: false, updatedAt: new Date() })
+        .where(eq(team.id, parsed.data.toTeamId));
     }
   });
 
@@ -393,23 +441,28 @@ export async function adminTransferCaptain(formData: FormData): Promise<void> {
   });
   if (!parsed.success) throw new Error("Missing member id");
 
-  const member = await prisma.teamMember.findUnique({
-    where: { id: parsed.data.memberId },
-    select: { id: true, teamId: true, isCaptain: true },
+  const member = await db.query.teamMember.findFirst({
+    where: eq(teamMember.id, parsed.data.memberId),
+    columns: { id: true, teamId: true, isCaptain: true },
   });
   if (!member) throw new Error("Member not found");
   if (member.isCaptain) return; // no-op
 
-  await prisma.$transaction([
-    prisma.teamMember.updateMany({
-      where: { teamId: member.teamId, isCaptain: true },
-      data: { isCaptain: false },
-    }),
-    prisma.teamMember.update({
-      where: { id: member.id },
-      data: { isCaptain: true },
-    }),
-  ]);
+  await db.transaction(async (tx) => {
+    await tx
+      .update(teamMember)
+      .set({ isCaptain: false })
+      .where(
+        and(
+          eq(teamMember.teamId, member.teamId),
+          eq(teamMember.isCaptain, true),
+        ),
+      );
+    await tx
+      .update(teamMember)
+      .set({ isCaptain: true })
+      .where(eq(teamMember.id, member.id));
+  });
 
   revalidatePath("/admin/hackathon/teams");
   revalidatePath(`/hackathon/teams/${member.teamId}`);
@@ -451,22 +504,27 @@ export async function setWorkshopHackathonConfig(
     ? new Date(parsed.data.submitBy)
     : null;
 
-  await prisma.hackathonConfig.upsert({
-    where: { cohortId: parsed.data.cohortId },
-    create: {
+  await db
+    .insert(hackathonConfig)
+    .values({
+      id: createId(),
       cohortId: parsed.data.cohortId,
       maxTeamSize: parsed.data.maxTeamSize,
       submitBy,
       leaderboardPublic: parsed.data.leaderboardPublic === "on",
       wallRequireApproval: parsed.data.wallRequireApproval === "on",
-    },
-    update: {
-      maxTeamSize: parsed.data.maxTeamSize,
-      submitBy,
-      leaderboardPublic: parsed.data.leaderboardPublic === "on",
-      wallRequireApproval: parsed.data.wallRequireApproval === "on",
-    },
-  });
+      updatedAt: new Date(),
+    })
+    .onConflictDoUpdate({
+      target: hackathonConfig.cohortId,
+      set: {
+        maxTeamSize: parsed.data.maxTeamSize,
+        submitBy,
+        leaderboardPublic: parsed.data.leaderboardPublic === "on",
+        wallRequireApproval: parsed.data.wallRequireApproval === "on",
+        updatedAt: new Date(),
+      },
+    });
 
   revalidatePath(`/admin/cohorts/${parsed.data.cohortId}`);
   revalidatePath(`/cohorts/${parsed.data.cohortId}`);
@@ -482,8 +540,9 @@ export async function clearWorkshopHackathonConfig(
   await requireRole(["admin", "instructor"]);
   const cohortId = String(formData.get("cohortId") ?? "");
   if (!cohortId) throw new Error("Missing workshop");
-  await prisma.hackathonConfig
-    .delete({ where: { cohortId } })
+  await db
+    .delete(hackathonConfig)
+    .where(eq(hackathonConfig.cohortId, cohortId))
     .catch(() => {});
   revalidatePath(`/admin/cohorts/${cohortId}`);
   revalidatePath(`/cohorts/${cohortId}`);

@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { eq } from "drizzle-orm";
 import { requireUser } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { db, team as teamTable } from "@/lib/db";
 import {
   addTeamWokwiLink,
   deleteTeamMessage,
@@ -22,30 +23,44 @@ export default async function TeamWorkspacePage({
   const user = await requireUser();
   const { id } = await params;
 
-  const team = await prisma.team.findUnique({
-    where: { id },
-    include: {
-      members: {
-        orderBy: { joinedAt: "asc" },
-        include: {
-          user: { select: { id: true, name: true, email: true } },
+  const teamRaw = await db.query.team.findFirst({
+    where: eq(teamTable.id, id),
+    with: {
+      teamMembers: {
+        orderBy: (m, { asc }) => [asc(m.joinedAt)],
+        with: {
+          user: { columns: { id: true, name: true, email: true } },
         },
       },
-      wokwiLinks: { orderBy: { createdAt: "desc" } },
-      submission: true,
-      messages: {
-        orderBy: { createdAt: "asc" },
-        take: 100,
-        include: {
-          author: {
-            select: { id: true, name: true, email: true, handle: true },
+      teamWokwiLinks: { orderBy: (l, { desc }) => [desc(l.createdAt)] },
+      submissions: true,
+      teamMessages: {
+        orderBy: (msg, { asc }) => [asc(msg.createdAt)],
+        limit: 100,
+        with: {
+          user: {
+            columns: { id: true, name: true, email: true, handle: true },
           },
         },
       },
     },
   });
-  const config = await getHackathonConfig(team?.cohortId ?? null);
-  if (!team) notFound();
+  const config = await getHackathonConfig(teamRaw?.cohortId ?? null);
+  if (!teamRaw) notFound();
+
+  // Map Drizzle relation names back to the keys the JSX expects.
+  // submissions is a many-relation in Drizzle but one-to-one in practice
+  // (unique teamId), so collapse to the single row (or null).
+  const team = {
+    ...teamRaw,
+    members: teamRaw.teamMembers,
+    wokwiLinks: teamRaw.teamWokwiLinks,
+    submission: teamRaw.submissions[0] ?? null,
+    messages: teamRaw.teamMessages.map((msg) => ({
+      ...msg,
+      author: msg.user,
+    })),
+  };
 
   const now = new Date();
   const deadlinePassed = !!(config.submitBy && now > config.submitBy);

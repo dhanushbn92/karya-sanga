@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { eq } from "drizzle-orm";
 import { requireUser } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { db, team as teamTable } from "@/lib/db";
 import { submitProject } from "@/lib/actions/submissions";
 import { getHackathonConfig } from "@/lib/hackathon-config";
 
@@ -15,14 +16,22 @@ export default async function SubmitPage({
   const user = await requireUser();
   const { id } = await params;
 
-  const team = await prisma.team.findUnique({
-    where: { id },
-    include: {
-      members: { select: { userId: true } },
-      submission: true,
+  const teamRaw = await db.query.team.findFirst({
+    where: eq(teamTable.id, id),
+    with: {
+      teamMembers: { columns: { userId: true } },
+      submissions: true,
     },
   });
-  if (!team) notFound();
+  if (!teamRaw) notFound();
+  // Map Drizzle relation names back to the keys the JSX expects.
+  // submissions is a many-relation in Drizzle but one-to-one in practice
+  // (unique teamId), so collapse to the single row (or null).
+  const team = {
+    ...teamRaw,
+    members: teamRaw.teamMembers,
+    submission: teamRaw.submissions[0] ?? null,
+  };
   const config = await getHackathonConfig(team.cohortId);
 
   // Must be on the team.

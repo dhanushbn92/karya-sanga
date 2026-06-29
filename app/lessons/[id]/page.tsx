@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { and, eq, inArray } from "drizzle-orm";
 import { requireUser } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { db, lesson as lessonTable, module as moduleTable, progress } from "@/lib/db";
 import { LessonBody } from "@/components/lessons/lesson-body";
 import { MarkCompleteButton } from "@/components/lessons/mark-complete-button";
 
@@ -32,18 +33,20 @@ export default async function LessonPage({
   const { id } = await params;
   const user = await requireUser();
 
-  const lesson = await prisma.lesson.findFirst({
-    where: { id, published: true },
-    include: {
+  const lesson = await db.query.lesson.findFirst({
+    where: and(eq(lessonTable.id, id), eq(lessonTable.published, true)),
+    with: {
       module: {
-        select: {
+        columns: {
           id: true,
           title: true,
           order: true,
+        },
+        with: {
           lessons: {
-            where: { published: true },
-            orderBy: { order: "asc" },
-            select: { id: true, title: true, difficulty: true },
+            where: (l, { eq }) => eq(l.published, true),
+            orderBy: (l, { asc }) => [asc(l.order)],
+            columns: { id: true, title: true, difficulty: true },
           },
         },
       },
@@ -53,23 +56,29 @@ export default async function LessonPage({
   if (!lesson) notFound();
 
   const [progressRows, myProgress, allModules] = await Promise.all([
-    prisma.progress.findMany({
-      where: {
-        userId: user.id,
-        lessonId: { in: lesson.module.lessons.map((l) => l.id) },
-        completed: true,
-      },
-      select: { lessonId: true },
+    db.query.progress.findMany({
+      where: and(
+        eq(progress.userId, user.id),
+        inArray(
+          progress.lessonId,
+          lesson.module.lessons.map((l) => l.id),
+        ),
+        eq(progress.completed, true),
+      ),
+      columns: { lessonId: true },
     }),
-    prisma.progress.findUnique({
-      where: { userId_lessonId: { userId: user.id, lessonId: lesson.id } },
-      select: { completed: true },
+    db.query.progress.findFirst({
+      where: and(
+        eq(progress.userId, user.id),
+        eq(progress.lessonId, lesson.id),
+      ),
+      columns: { completed: true },
     }),
     // Used only to compute the module's display number across the library.
-    prisma.module.findMany({
-      where: { published: true },
-      orderBy: { order: "asc" },
-      select: { id: true },
+    db.query.module.findMany({
+      where: eq(moduleTable.published, true),
+      orderBy: (m, { asc }) => [asc(m.order)],
+      columns: { id: true },
     }),
   ]);
   const completed = new Set(progressRows.map((p) => p.lessonId));

@@ -1,6 +1,7 @@
 import Link from "next/link";
+import { and, eq } from "drizzle-orm";
 import { requireUser } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { db, module as moduleTable, progress } from "@/lib/db";
 
 export const metadata = { title: "Lessons · Karya Sanga" };
 
@@ -40,15 +41,15 @@ export default async function LessonsIndexPage({
       ? level
       : "All";
 
-  const [modules, progressRows] = await Promise.all([
-    prisma.module.findMany({
-      where: { published: true },
-      orderBy: { order: "asc" },
-      include: {
+  const [modulesRaw, progressRows] = await Promise.all([
+    db.query.module.findMany({
+      where: eq(moduleTable.published, true),
+      orderBy: (m, { asc }) => [asc(m.order)],
+      with: {
         lessons: {
-          where: { published: true },
-          orderBy: { order: "asc" },
-          select: {
+          where: (l, { eq }) => eq(l.published, true),
+          orderBy: (l, { asc }) => [asc(l.order)],
+          columns: {
             id: true,
             title: true,
             summary: true,
@@ -59,14 +60,22 @@ export default async function LessonsIndexPage({
           },
         },
         // Count of workshops this module is attached to — shown as a chip.
-        _count: { select: { attachedToWorkshops: true } },
+        workshopModules: { columns: { id: true } },
       },
     }),
-    prisma.progress.findMany({
-      where: { userId: user.id, completed: true },
-      select: { lessonId: true },
+    db.query.progress.findMany({
+      where: and(eq(progress.userId, user.id), eq(progress.completed, true)),
+      columns: { lessonId: true },
     }),
   ]);
+
+  // Map the fetched join rows to the `_count.attachedToWorkshops` shape the
+  // JSX reads (Prisma's relation `attachedToWorkshops` → Drizzle
+  // `workshopModules`).
+  const modules = modulesRaw.map((m) => ({
+    ...m,
+    _count: { attachedToWorkshops: m.workshopModules.length },
+  }));
 
   const completed = new Set(progressRows.map((r) => r.lessonId));
   const totalLessons = modules.reduce((s, m) => s + m.lessons.length, 0);

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { db, hackathonConfig, submission } from "@/lib/db";
 
 export const metadata = { title: "Leaderboard · Karya Sanga" };
 
@@ -12,21 +12,23 @@ export default async function LeaderboardPage() {
     user.role === "instructor" ||
     user.role === "judge";
 
-  const config = await prisma.hackathonConfig.upsert({
-    where: { id: "default" },
-    create: { id: "default" },
-    update: {},
-    select: { leaderboardPublic: true },
-  });
+  const [config] = await db
+    .insert(hackathonConfig)
+    .values({ id: "default", updatedAt: new Date() })
+    .onConflictDoUpdate({
+      target: hackathonConfig.id,
+      set: { id: "default" },
+    })
+    .returning({ leaderboardPublic: hackathonConfig.leaderboardPublic });
 
   // Gate: privileged users always see it; participants only when public.
   if (!isPrivileged && !config.leaderboardPublic) {
     redirect("/hackathon");
   }
 
-  const submissions = await prisma.submission.findMany({
-    include: {
-      team: { select: { id: true, name: true } },
+  const submissions = await db.query.submission.findMany({
+    with: {
+      team: { columns: { id: true, name: true } },
       scores: true,
     },
   });

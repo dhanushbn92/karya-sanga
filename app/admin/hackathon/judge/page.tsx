@@ -1,23 +1,40 @@
 import Link from "next/link";
+import { desc, eq, sql } from "drizzle-orm";
 import { requireRole } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { db, submission, score } from "@/lib/db";
 
 export const metadata = { title: "Judging · Karya Sanga" };
 
 export default async function JudgeIndexPage() {
   const me = await requireRole(["admin", "instructor", "judge"]);
 
-  const submissions = await prisma.submission.findMany({
-    orderBy: { submittedAt: "desc" },
-    include: {
-      team: { select: { id: true, name: true } },
+  const submissionsRaw = await db.query.submission.findMany({
+    orderBy: [desc(submission.submittedAt)],
+    with: {
+      team: { columns: { id: true, name: true } },
       scores: {
-        where: { judgeId: me.id },
-        select: { innovation: true, technical: true, aiUse: true, presentation: true },
+        where: eq(score.judgeId, me.id),
+        columns: {
+          innovation: true,
+          technical: true,
+          aiUse: true,
+          presentation: true,
+        },
       },
-      _count: { select: { scores: true } },
+    },
+    extras: {
+      scoreCount:
+        sql<number>`(select count(*)::int from ${score} where ${score.submissionId} = ${submission.id})`.as(
+          "scoreCount",
+        ),
     },
   });
+
+  // Map _count.scores (Prisma) → scoreCount extra.
+  const submissions = submissionsRaw.map((s) => ({
+    ...s,
+    _count: { scores: Number(s.scoreCount) },
+  }));
 
   return (
     <main className="mx-auto w-full max-w-[1280px] flex-1 px-4 md:px-16 py-12">

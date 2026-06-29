@@ -1,6 +1,14 @@
 import Link from "next/link";
+import { asc, desc, eq, sql } from "drizzle-orm";
 import { requireRole } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import {
+  db,
+  hackathonConfig,
+  team,
+  teamMember,
+  user,
+  lookingForTeam,
+} from "@/lib/db";
 import {
   adminAddMember,
   adminCreateTeamWithMembers,
@@ -15,45 +23,67 @@ export const metadata = { title: "Team management · Admin" };
 export default async function AdminTeamsPage() {
   await requireRole(["admin", "instructor"]);
 
-  const [config, teams, soloParticipants, lookingPosts] = await Promise.all([
-    prisma.hackathonConfig.upsert({
-      where: { id: "default" },
-      create: { id: "default" },
-      update: {},
-      select: { maxTeamSize: true },
-    }),
-    prisma.team.findMany({
-      orderBy: { createdAt: "asc" },
-      include: {
-        members: {
-          orderBy: { joinedAt: "asc" },
-          include: {
-            user: { select: { id: true, name: true, email: true } },
+  const [config, teamsRaw, soloParticipantsRaw, lookingPosts] =
+    await Promise.all([
+      // upsert the "default" config row, then read back just maxTeamSize.
+      db
+        .insert(hackathonConfig)
+        .values({ id: "default", updatedAt: new Date() })
+        .onConflictDoNothing({ target: hackathonConfig.id })
+        .then(() =>
+          db.query.hackathonConfig.findFirst({
+            where: eq(hackathonConfig.id, "default"),
+            columns: { maxTeamSize: true },
+          }),
+        ),
+      db.query.team.findMany({
+        orderBy: [asc(team.createdAt)],
+        with: {
+          teamMembers: {
+            orderBy: [asc(teamMember.joinedAt)],
+            with: {
+              user: { columns: { id: true, name: true, email: true } },
+            },
           },
         },
-        _count: { select: { members: true } },
-      },
-    }),
-    // Participants (or judges — but most likely participants) with no team.
-    prisma.user.findMany({
-      where: {
-        role: { in: ["participant", "judge"] },
-        teamMembership: null,
-      },
-      orderBy: { createdAt: "asc" },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        lookingForTeam: { select: { skills: true, interests: true } },
-      },
-    }),
-    prisma.lookingForTeam.findMany({
-      orderBy: { updatedAt: "desc" },
-      select: { userId: true },
-    }),
-  ]);
+        extras: {
+          memberCount:
+            sql<number>`(select count(*)::int from ${teamMember} where ${teamMember.teamId} = ${team.id})`.as(
+              "memberCount",
+            ),
+        },
+      }),
+      // Participants (or judges — but most likely participants) with no team.
+      db.query.user.findMany({
+        where: sql`${user.role} in ('participant', 'judge') and not exists (select 1 from ${teamMember} where ${teamMember.userId} = ${user.id})`,
+        orderBy: [asc(user.createdAt)],
+        columns: { id: true, email: true, name: true, role: true },
+        with: {
+          lookingForTeams: {
+            columns: { skills: true, interests: true },
+          },
+        },
+      }),
+      db.query.lookingForTeam.findMany({
+        orderBy: [desc(lookingForTeam.updatedAt)],
+        columns: { userId: true },
+      }),
+    ]);
+
+  if (!config) throw new Error("HackathonConfig default row missing");
+
+  // Map Drizzle relation names back to the keys the JSX expects:
+  // teamMembers → members, memberCount extra → _count.members,
+  // lookingForTeams (many) → lookingForTeam (one).
+  const teams = teamsRaw.map((t) => ({
+    ...t,
+    members: t.teamMembers,
+    _count: { members: Number(t.memberCount) },
+  }));
+  const soloParticipants = soloParticipantsRaw.map((u) => ({
+    ...u,
+    lookingForTeam: u.lookingForTeams[0] ?? null,
+  }));
 
   const lookingUserIds = new Set(lookingPosts.map((p) => p.userId));
   const totalMembers = teams.reduce((s, t) => s + t._count.members, 0);

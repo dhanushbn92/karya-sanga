@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
 import { joinWorkshop } from "@/lib/actions/alumni";
 
 export const metadata = { title: "Workshops · Karya Sanga" };
@@ -81,14 +81,33 @@ export default async function WorkshopsPage({
   // All workshops + which ones the user belongs to. "Yours" reads BOTH the
   // single-FK relation (User.cohortId, kept for back-compat) and the new
   // UserCohort join, so a user attending multiple workshops sees all of them.
-  const cohorts = await prisma.cohort.findMany({
-    orderBy: [{ current: "desc" }, { startedOn: "desc" }],
-    include: {
-      _count: { select: { members: true, projects: true } },
-      members: { where: { id: me.id }, select: { id: true } },
-      memberships: { where: { userId: me.id }, select: { id: true } },
+  const cohortsRaw = await db.query.cohort.findMany({
+    orderBy: (c, { desc }) => [desc(c.current), desc(c.startedOn)],
+    with: {
+      // `users` = primary members (User.cohortId); `teams` = projects.
+      // Fetched id-only to derive `_count`. `userCohorts` (userId-only) lets
+      // us detect secondary membership for the current user.
+      users: { columns: { id: true } },
+      teams: { columns: { id: true } },
+      userCohorts: { columns: { userId: true } },
     },
   });
+
+  // Map relation rows back to the `_count` + `members` / `memberships` shapes
+  // the JSX + filters expect. `members` / `memberships` are filtered to the
+  // current user (only their length matters for the "Yours" check), while
+  // `_count` keeps the TOTAL counts.
+  const cohorts = cohortsRaw.map((c) => ({
+    id: c.id,
+    name: c.name,
+    description: c.description,
+    startedOn: c.startedOn,
+    endedOn: c.endedOn,
+    current: c.current,
+    _count: { members: c.users.length, projects: c.teams.length },
+    members: c.users.filter((u) => u.id === me.id),
+    memberships: c.userCohorts.filter((uc) => uc.userId === me.id),
+  }));
 
   // "Yours" = primary cohort OR any UserCohort row.
   const yours = cohorts.filter(

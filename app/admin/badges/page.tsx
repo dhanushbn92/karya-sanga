@@ -1,6 +1,7 @@
 import Link from "next/link";
+import { inArray } from "drizzle-orm";
 import { requireRole } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { db, badge, user as userTable, earnedBadge } from "@/lib/db";
 import {
   adminAwardBadge,
   adminRevokeBadge,
@@ -11,22 +12,27 @@ export const metadata = { title: "Badges · Admin" };
 export default async function BadgesAdminPage() {
   await requireRole(["admin", "instructor"]);
 
-  const [badges, users, recent] = await Promise.all([
-    prisma.badge.findMany({ orderBy: [{ category: "asc" }, { order: "asc" }] }),
-    prisma.user.findMany({
-      where: { role: { in: ["participant", "judge"] } },
-      orderBy: [{ name: "asc" }, { email: "asc" }],
-      select: { id: true, name: true, email: true },
+  const [badges, users, recentRaw] = await Promise.all([
+    db.query.badge.findMany({
+      orderBy: (b, { asc }) => [asc(b.category), asc(b.order)],
     }),
-    prisma.earnedBadge.findMany({
-      orderBy: { earnedAt: "desc" },
-      take: 50,
-      include: {
-        user: { select: { id: true, name: true, email: true } },
-        badge: { select: { name: true, icon: true } },
+    db.query.user.findMany({
+      where: inArray(userTable.role, ["participant", "judge"]),
+      orderBy: (u, { asc }) => [asc(u.name), asc(u.email)],
+      columns: { id: true, name: true, email: true },
+    }),
+    db.query.earnedBadge.findMany({
+      orderBy: (eb, { desc }) => [desc(eb.earnedAt)],
+      limit: 50,
+      with: {
+        user_userId: { columns: { id: true, name: true, email: true } },
+        badge: { columns: { name: true, icon: true } },
       },
     }),
   ]);
+
+  // Map Drizzle relation names back to the keys the JSX expects.
+  const recent = recentRaw.map((eb) => ({ ...eb, user: eb.user_userId }));
 
   return (
     <main className="mx-auto w-full max-w-[1280px] flex-1 px-4 md:px-16 py-12">

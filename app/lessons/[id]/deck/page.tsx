@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { eq } from "drizzle-orm";
 import { requireUser } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { db, lesson as lessonTable } from "@/lib/db";
 import { signedLessonSlideUrl } from "@/lib/supabase/admin";
 
 export const metadata = { title: "Slides · Karya Sanga" };
@@ -20,9 +21,9 @@ export default async function DeckPage({
   await requireUser();
   const { id } = await params;
 
-  const lesson = await prisma.lesson.findFirst({
-    where: { id },
-    include: { module: { select: { title: true } } },
+  const lesson = await db.query.lesson.findFirst({
+    where: eq(lessonTable.id, id),
+    with: { module: { columns: { title: true } } },
   });
   if (!lesson) notFound();
 
