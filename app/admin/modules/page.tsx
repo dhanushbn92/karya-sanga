@@ -11,13 +11,13 @@ export default async function ModulesAdminPage() {
 
   const moduleRows = await db.query.module.findMany({
     orderBy: (m, { asc }) => [asc(m.order)],
-    with: { lessons: { columns: { id: true } } },
+    with: { moduleLessons: { columns: { id: true } } },
   });
 
   // Translate _count.lessons via fetched-rows length.
   const modules = moduleRows.map((m) => ({
     ...m,
-    _count: { lessons: m.lessons.length },
+    _count: { lessons: m.moduleLessons.length },
   }));
 
   return (

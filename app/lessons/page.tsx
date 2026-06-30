@@ -46,17 +46,21 @@ export default async function LessonsIndexPage({
       where: eq(moduleTable.published, true),
       orderBy: (m, { asc }) => [asc(m.order)],
       with: {
-        lessons: {
-          where: (l, { eq }) => eq(l.published, true),
-          orderBy: (l, { asc }) => [asc(l.order)],
-          columns: {
-            id: true,
-            title: true,
-            summary: true,
-            difficulty: true,
-            wokwiProjectUrl: true,
-            slidesUrl: true,
-            slideFilePath: true,
+        moduleLessons: {
+          orderBy: (ml, { asc }) => [asc(ml.order)],
+          with: {
+            lesson: {
+              columns: {
+                published: true,
+                id: true,
+                title: true,
+                summary: true,
+                difficulty: true,
+                wokwiProjectUrl: true,
+                slidesUrl: true,
+                slideFilePath: true,
+              },
+            },
           },
         },
         // Count of workshops this module is attached to — shown as a chip.
@@ -74,6 +78,9 @@ export default async function LessonsIndexPage({
   // `workshopModules`).
   const modules = modulesRaw.map((m) => ({
     ...m,
+    lessons: m.moduleLessons
+      .map((ml) => ml.lesson)
+      .filter((l) => l.published),
     _count: { attachedToWorkshops: m.workshopModules.length },
   }));
 

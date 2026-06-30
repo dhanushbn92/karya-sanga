@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { and, asc, desc, eq } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
-import { db, module, lesson, workshopModule } from "@/lib/db";
+import { db, module, lesson, workshopModule, moduleLesson } from "@/lib/db";
 import { requireRole, requireWorkshopManager } from "@/lib/auth";
 import { deleteLessonSlide } from "@/lib/supabase/admin";
 
@@ -134,8 +134,9 @@ export async function createLesson(formData: FormData): Promise<void> {
     fail(parsed.error.issues[0]?.message ?? "Invalid input");
   }
 
+  const lessonId = createId();
   await db.insert(lesson).values({
-    id: createId(),
+    id: lessonId,
     ...parsed.data,
     wokwiProjectUrl: parsed.data.wokwiProjectUrl || null,
     slidesUrl: parsed.data.slidesUrl || null,
@@ -143,6 +144,21 @@ export async function createLesson(formData: FormData): Promise<void> {
     summary: parsed.data.summary || null,
     updatedAt: new Date(),
   });
+
+  // Attach the freshly-created lesson to its chapter (appended to the end).
+  const last = await db.query.moduleLesson.findFirst({
+    where: eq(moduleLesson.moduleId, parsed.data.moduleId),
+    orderBy: [desc(moduleLesson.order)],
+    columns: { order: true },
+  });
+  const nextOrder = (last?.order ?? -1) + 1;
+  await db.insert(moduleLesson).values({
+    id: createId(),
+    moduleId: parsed.data.moduleId,
+    lessonId,
+    order: nextOrder,
+  });
+
   revalidatePath(`/admin/modules/${parsed.data.moduleId}`);
   revalidatePath("/lessons");
 }
@@ -439,4 +455,123 @@ export async function moveAttachedModule(
 
   revalidatePath(`/admin/cohorts/${cohortId}`);
   revalidatePath(`/cohorts/${cohortId}`);
+}
+
+// =====================================================================
+// ModuleLesson attach / detach / reorder
+//
+// Lessons live in a platform-global library and are reused across chapters
+// via the ModuleLesson join table. These actions plug a lesson into a
+// chapter, unplug it (without deleting the lesson), and reorder it within
+// the chapter. Gated by requireRole — the library is platform-global.
+// =====================================================================
+
+const moduleLessonSchema = z.object({
+  moduleId: z.string().min(1),
+  lessonId: z.string().min(1),
+});
+
+/**
+ * Attach an existing library lesson to a chapter, appended at the end.
+ * Idempotent via the @@unique(moduleId, lessonId): re-attaching is a no-op.
+ */
+export async function attachLessonToModule(
+  formData: FormData,
+): Promise<void> {
+  await requireRole(["admin", "instructor"]);
+  const parsed = moduleLessonSchema.safeParse({
+    moduleId: formData.get("moduleId"),
+    lessonId: formData.get("lessonId"),
+  });
+  if (!parsed.success) fail("Invalid input");
+  const { moduleId, lessonId } = parsed.data;
+
+  const last = await db.query.moduleLesson.findFirst({
+    where: eq(moduleLesson.moduleId, moduleId),
+    orderBy: [desc(moduleLesson.order)],
+    columns: { order: true },
+  });
+  const nextOrder = (last?.order ?? -1) + 1;
+
+  await db
+    .insert(moduleLesson)
+    .values({ id: createId(), moduleId, lessonId, order: nextOrder })
+    .onConflictDoNothing({
+      target: [moduleLesson.moduleId, moduleLesson.lessonId],
+    });
+
+  revalidatePath(`/admin/modules/${moduleId}`);
+}
+
+/**
+ * Detach a lesson from a chapter. Removes only the join row — the lesson
+ * itself (and any other chapter attachments) is left untouched.
+ */
+export async function detachLessonFromModule(
+  formData: FormData,
+): Promise<void> {
+  await requireRole(["admin", "instructor"]);
+  const parsed = moduleLessonSchema.safeParse({
+    moduleId: formData.get("moduleId"),
+    lessonId: formData.get("lessonId"),
+  });
+  if (!parsed.success) fail("Invalid input");
+  const { moduleId, lessonId } = parsed.data;
+
+  await db
+    .delete(moduleLesson)
+    .where(
+      and(
+        eq(moduleLesson.moduleId, moduleId),
+        eq(moduleLesson.lessonId, lessonId),
+      ),
+    );
+
+  revalidatePath(`/admin/modules/${moduleId}`);
+}
+
+const moveModuleLessonSchema = z.object({
+  moduleId: z.string().min(1),
+  lessonId: z.string().min(1),
+  dir: z.enum(["up", "down"]),
+});
+
+/**
+ * Swap a lesson with its neighbour within a chapter. Two updates inside a
+ * transaction; no-op at the ends.
+ */
+export async function moveModuleLesson(formData: FormData): Promise<void> {
+  await requireRole(["admin", "instructor"]);
+  const parsed = moveModuleLessonSchema.safeParse({
+    moduleId: formData.get("moduleId"),
+    lessonId: formData.get("lessonId"),
+    dir: formData.get("dir"),
+  });
+  if (!parsed.success) fail("Invalid input");
+  const { moduleId, lessonId, dir } = parsed.data;
+
+  const items = await db.query.moduleLesson.findMany({
+    where: eq(moduleLesson.moduleId, moduleId),
+    orderBy: [asc(moduleLesson.order)],
+    columns: { id: true, lessonId: true, order: true },
+  });
+  const idx = items.findIndex((r) => r.lessonId === lessonId);
+  if (idx === -1) return;
+  const swapIdx = dir === "up" ? idx - 1 : idx + 1;
+  if (swapIdx < 0 || swapIdx >= items.length) return; // edge — silently ignore
+
+  const a = items[idx];
+  const b = items[swapIdx];
+  await db.transaction(async (tx) => {
+    await tx
+      .update(moduleLesson)
+      .set({ order: b.order })
+      .where(eq(moduleLesson.id, a.id));
+    await tx
+      .update(moduleLesson)
+      .set({ order: a.order })
+      .where(eq(moduleLesson.id, b.id));
+  });
+
+  revalidatePath(`/admin/modules/${moduleId}`);
 }

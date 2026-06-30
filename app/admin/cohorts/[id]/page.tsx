@@ -165,7 +165,7 @@ export default async function CohortEditPage({
               published: true,
             },
             with: {
-              lessons: { columns: { id: true } },
+              moduleLessons: { columns: { id: true } },
             },
           },
         },
@@ -179,7 +179,7 @@ export default async function CohortEditPage({
           published: true,
         },
         with: {
-          lessons: { columns: { id: true } },
+          moduleLessons: { columns: { id: true } },
         },
       }),
       db.query.badge.findMany({
@@ -216,12 +216,12 @@ export default async function CohortEditPage({
     ...row,
     module: {
       ...row.module,
-      _count: { lessons: row.module.lessons.length },
+      _count: { lessons: row.module.moduleLessons.length },
     },
   }));
   const allModules = allModulesRaw.map((m) => ({
     ...m,
-    _count: { lessons: m.lessons.length },
+    _count: { lessons: m.moduleLessons.length },
   }));
 
   // Translate badge._count.earned (earnedBadges relation) via rows length.

@@ -572,7 +572,10 @@ export const comment = pgTable("Comment", {
 
 export const lesson = pgTable("Lesson", {
 	id: text().primaryKey().notNull(),
-	moduleId: text().notNull(),
+	// Legacy "home chapter" — now nullable. Chapter membership + per-chapter
+	// order live in the ModuleLesson join table (a lesson can be in many
+	// chapters). Kept for back-compat; not used for membership.
+	moduleId: text(),
 	title: text().notNull(),
 	summary: text(),
 	body: text().default("").notNull(),
@@ -592,6 +595,30 @@ export const lesson = pgTable("Lesson", {
 			columns: [table.moduleId],
 			foreignColumns: [module.id],
 			name: "Lesson_moduleId_fkey"
+		}).onUpdate("cascade").onDelete("set null"),
+]);
+
+// Join table: which chapters a lesson belongs to + its order within each.
+// A lesson can be attached to many chapters ("plug and play").
+export const moduleLesson = pgTable("ModuleLesson", {
+	id: text().primaryKey().notNull(),
+	moduleId: text().notNull(),
+	lessonId: text().notNull(),
+	order: integer().default(0).notNull(),
+	createdAt: timestamp({ precision: 3, mode: 'date' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+	uniqueIndex("ModuleLesson_moduleId_lessonId_key").using("btree", table.moduleId.asc().nullsLast().op("text_ops"), table.lessonId.asc().nullsLast().op("text_ops")),
+	index("ModuleLesson_moduleId_order_idx").using("btree", table.moduleId.asc().nullsLast().op("text_ops"), table.order.asc().nullsLast().op("int4_ops")),
+	index("ModuleLesson_lessonId_idx").using("btree", table.lessonId.asc().nullsLast().op("text_ops")),
+	foreignKey({
+			columns: [table.moduleId],
+			foreignColumns: [module.id],
+			name: "ModuleLesson_moduleId_fkey"
+		}).onUpdate("cascade").onDelete("cascade"),
+	foreignKey({
+			columns: [table.lessonId],
+			foreignColumns: [lesson.id],
+			name: "ModuleLesson_lessonId_fkey"
 		}).onUpdate("cascade").onDelete("cascade"),
 ]);
 

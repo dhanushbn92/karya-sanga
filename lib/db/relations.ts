@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm/relations";
-import { cohort, badge, user, cohortPost, buildLogEntry, team, blogPost, earnedBadge, blogComment, takeItFurtherSession, sessionRegistration, featuredBuilder, showAndTellEvent, showAndTellPresenter, hackathonConfig, lookingForTeam, wallPost, submission, score, teamMember, teamWokwiLink, savedProject, lesson, progress, comment, module, reaction, projectReaction, projectComment, conversation, directMessage, workshopModule, userCohort, teamMessage, workshopFeedback } from "./schema";
+import { cohort, badge, user, cohortPost, buildLogEntry, team, blogPost, earnedBadge, blogComment, takeItFurtherSession, sessionRegistration, featuredBuilder, showAndTellEvent, showAndTellPresenter, hackathonConfig, lookingForTeam, wallPost, submission, score, teamMember, teamWokwiLink, savedProject, lesson, progress, comment, module, reaction, projectReaction, projectComment, conversation, directMessage, workshopModule, userCohort, teamMessage, workshopFeedback, moduleLesson } from "./schema";
 
 export const workshopFeedbackRelations = relations(workshopFeedback, ({one}) => ({
 	user: one(user, {
@@ -289,6 +289,7 @@ export const lessonRelations = relations(lesson, ({one, many}) => ({
 		fields: [lesson.moduleId],
 		references: [module.id]
 	}),
+	moduleLessons: many(moduleLesson),
 }));
 
 export const commentRelations = relations(comment, ({one}) => ({
@@ -305,6 +306,18 @@ export const commentRelations = relations(comment, ({one}) => ({
 export const moduleRelations = relations(module, ({many}) => ({
 	lessons: many(lesson),
 	workshopModules: many(workshopModule),
+	moduleLessons: many(moduleLesson),
+}));
+
+export const moduleLessonRelations = relations(moduleLesson, ({one}) => ({
+	module: one(module, {
+		fields: [moduleLesson.moduleId],
+		references: [module.id],
+	}),
+	lesson: one(lesson, {
+		fields: [moduleLesson.lessonId],
+		references: [lesson.id],
+	}),
 }));
 
 export const reactionRelations = relations(reaction, ({one}) => ({

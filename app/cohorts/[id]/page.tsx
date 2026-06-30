@@ -183,16 +183,20 @@ export default async function WorkshopPage({
           with: {
             module: {
               with: {
-                lessons: {
-                  where: (l, { eq }) => eq(l.published, true),
-                  orderBy: (l, { asc }) => [asc(l.order)],
-                  columns: {
-                    id: true,
-                    title: true,
-                    summary: true,
-                    difficulty: true,
-                    wokwiProjectUrl: true,
-                    slideFilePath: true,
+                moduleLessons: {
+                  orderBy: (ml, { asc }) => [asc(ml.order)],
+                  with: {
+                    lesson: {
+                      columns: {
+                        published: true,
+                        id: true,
+                        title: true,
+                        summary: true,
+                        difficulty: true,
+                        wokwiProjectUrl: true,
+                        slideFilePath: true,
+                      },
+                    },
                   },
                 },
               },
@@ -200,7 +204,15 @@ export default async function WorkshopPage({
           },
         })
         .then((rows) =>
-          rows.map((r) => r.module).filter((m) => m.published),
+          rows
+            .map((r) => r.module)
+            .filter((m) => m.published)
+            .map((m) => ({
+              ...m,
+              lessons: m.moduleLessons
+                .map((ml) => ml.lesson)
+                .filter((l) => l.published),
+            })),
         ),
       db.query.progress.findMany({
         where: and(eq(progress.userId, me.id), eq(progress.completed, true)),

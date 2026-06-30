@@ -36,7 +36,7 @@ export default async function PresentPage({
     <PresenterDeck
       slides={slides}
       lessonTitle={lesson.title}
-      lessonModule={lesson.module.title}
+      lessonModule={lesson.module?.title ?? "Lesson"}
       lessonId={lesson.id}
     />
   );

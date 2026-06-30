@@ -27,33 +27,74 @@ const DIFFICULTY_TONE: Record<string, string> = {
  */
 export default async function LessonPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ module?: string }>;
 }) {
   const { id } = await params;
+  const { module: moduleParam } = await searchParams;
   const user = await requireUser();
 
   const lesson = await db.query.lesson.findFirst({
     where: and(eq(lessonTable.id, id), eq(lessonTable.published, true)),
     with: {
-      module: {
-        columns: {
-          id: true,
-          title: true,
-          order: true,
-        },
-        with: {
-          lessons: {
-            where: (l, { eq }) => eq(l.published, true),
-            orderBy: (l, { asc }) => [asc(l.order)],
-            columns: { id: true, title: true, difficulty: true },
-          },
-        },
-      },
+      moduleLessons: { columns: { moduleId: true } },
     },
   });
 
   if (!lesson) notFound();
+
+  // A lesson can live in many chapters. Read it in the context of the
+  // ?module= chapter if the lesson belongs to it, else its first chapter.
+  const chapterIds = lesson.moduleLessons.map((ml) => ml.moduleId);
+  const chapterId =
+    moduleParam && chapterIds.includes(moduleParam)
+      ? moduleParam
+      : (chapterIds[0] ?? null);
+
+  const chapterRaw = chapterId
+    ? await db.query.module.findFirst({
+        where: eq(moduleTable.id, chapterId),
+        columns: { id: true, title: true, order: true },
+        with: {
+          moduleLessons: {
+            orderBy: (ml, { asc }) => [asc(ml.order)],
+            with: {
+              lesson: {
+                columns: {
+                  id: true,
+                  title: true,
+                  difficulty: true,
+                  published: true,
+                },
+              },
+            },
+          },
+        },
+      })
+    : null;
+
+  // Normalize to the { id, title, lessons } shape the rest of the page reads.
+  const chapter = {
+    id: chapterRaw?.id ?? "",
+    title: chapterRaw?.title ?? lesson.title,
+    lessons: chapterRaw
+      ? chapterRaw.moduleLessons
+          .filter((ml) => ml.lesson.published)
+          .map((ml) => ({
+            id: ml.lesson.id,
+            title: ml.lesson.title,
+            difficulty: ml.lesson.difficulty,
+          }))
+      : [
+          {
+            id: lesson.id,
+            title: lesson.title,
+            difficulty: lesson.difficulty,
+          },
+        ],
+  };
 
   const [progressRows, myProgress, allModules] = await Promise.all([
     db.query.progress.findMany({
@@ -61,7 +102,7 @@ export default async function LessonPage({
         eq(progress.userId, user.id),
         inArray(
           progress.lessonId,
-          lesson.module.lessons.map((l) => l.id),
+          chapter.lessons.map((l) => l.id),
         ),
         eq(progress.completed, true),
       ),
@@ -85,17 +126,17 @@ export default async function LessonPage({
   const isComplete = myProgress?.completed ?? false;
 
   // Position metadata
-  const moduleN = allModules.findIndex((m) => m.id === lesson.module.id) + 1;
-  const idx = lesson.module.lessons.findIndex((l) => l.id === lesson.id);
-  const prev = idx > 0 ? lesson.module.lessons[idx - 1] : null;
+  const moduleN = allModules.findIndex((m) => m.id === chapter.id) + 1;
+  const idx = chapter.lessons.findIndex((l) => l.id === lesson.id);
+  const prev = idx > 0 ? chapter.lessons[idx - 1] : null;
   const next =
-    idx >= 0 && idx < lesson.module.lessons.length - 1
-      ? lesson.module.lessons[idx + 1]
+    idx >= 0 && idx < chapter.lessons.length - 1
+      ? chapter.lessons[idx + 1]
       : null;
-  const moduleDone = lesson.module.lessons.filter((l) =>
+  const moduleDone = chapter.lessons.filter((l) =>
     completed.has(l.id),
   ).length;
-  const moduleTotal = lesson.module.lessons.length;
+  const moduleTotal = chapter.lessons.length;
   const modulePct =
     moduleTotal === 0 ? 0 : Math.round((moduleDone / moduleTotal) * 100);
 
@@ -125,7 +166,7 @@ export default async function LessonPage({
           </span>
         </div>
         <h2 className="text-base font-bold leading-tight text-on-surface">
-          {lesson.module.title}
+          {chapter.title}
         </h2>
         {/* Mini progress */}
         <div className="mt-3">
@@ -148,7 +189,7 @@ export default async function LessonPage({
         </div>
 
         <ul className="mt-5 space-y-1">
-          {lesson.module.lessons.map((l, i) => {
+          {chapter.lessons.map((l, i) => {
             const isCurrent = l.id === lesson.id;
             const done = completed.has(l.id);
             return (
@@ -210,7 +251,7 @@ export default async function LessonPage({
               menu_book
             </span>
             Chapter {String(moduleN).padStart(2, "0")} ·{" "}
-            {lesson.module.title}
+            {chapter.title}
           </span>
           {lesson.difficulty && (
             <span
@@ -345,7 +386,7 @@ export default async function LessonPage({
               </div>
               <div className="mt-0.5 text-[11px] text-on-surface-variant">
                 Chapter {String(moduleN).padStart(2, "0")} ·{" "}
-                {lesson.module.title}
+                {chapter.title}
               </div>
             </Link>
           ) : (
@@ -364,7 +405,7 @@ export default async function LessonPage({
               </div>
               <div className="mt-0.5 text-[11px] text-on-surface-variant">
                 Chapter {String(moduleN).padStart(2, "0")} ·{" "}
-                {lesson.module.title}
+                {chapter.title}
               </div>
             </Link>
           ) : (

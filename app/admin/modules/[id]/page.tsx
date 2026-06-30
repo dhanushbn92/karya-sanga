@@ -1,12 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { requireRole } from "@/lib/auth";
-import { db, module as moduleTable } from "@/lib/db";
+import { db, module as moduleTable, lesson as lessonTable } from "@/lib/db";
 import {
+  attachLessonToModule,
   createLesson,
   deleteLesson,
   deleteModule,
+  detachLessonFromModule,
+  moveModuleLesson,
   setLessonPublished,
   updateLesson,
   updateModule,
@@ -27,10 +30,43 @@ export default async function ModuleEditPage({
   const mod = await db.query.module.findFirst({
     where: eq(moduleTable.id, id),
     with: {
-      lessons: { orderBy: (l, { asc }) => [asc(l.order)] },
+      moduleLessons: {
+        orderBy: (ml, { asc }) => [asc(ml.order)],
+        with: {
+          lesson: {
+            columns: {
+              id: true,
+              title: true,
+              summary: true,
+              body: true,
+              difficulty: true,
+              published: true,
+              wokwiProjectUrl: true,
+              slidesUrl: true,
+              slideFilePath: true,
+              slideFileType: true,
+              slideFileName: true,
+              order: true,
+            },
+          },
+        },
+      },
     },
   });
   if (!mod) notFound();
+
+  // Lessons come from the join table, in attachment order (drafts included —
+  // this is the admin editor).
+  const lessons = mod.moduleLessons.map((ml) => ml.lesson);
+  const attachedIds = new Set(lessons.map((l) => l.id));
+
+  // Every library lesson NOT already plugged into this chapter — the
+  // "attach existing" picker.
+  const allLessons = await db.query.lesson.findMany({
+    orderBy: [asc(lessonTable.title)],
+    columns: { id: true, title: true, difficulty: true },
+  });
+  const attachableLessons = allLessons.filter((l) => !attachedIds.has(l.id));
 
   return (
     <main className="mx-auto w-full max-w-[1280px] flex-1 px-4 md:px-16 py-12">
@@ -129,17 +165,17 @@ export default async function ModuleEditPage({
         <div className="mb-4 flex items-end justify-between">
           <h2 className="text-headline-md text-on-surface">Lessons</h2>
           <span className="mono-label text-on-surface-variant">
-            {mod.lessons.length} total
+            {lessons.length} total
           </span>
         </div>
 
-        {mod.lessons.length === 0 ? (
+        {lessons.length === 0 ? (
           <p className="rounded-2xl border border-dashed border-white/10 bg-surface-container-low p-6 text-on-surface-variant">
             No lessons yet. Add one below.
           </p>
         ) : (
           <ul className="space-y-3">
-            {mod.lessons.map((l, i) => (
+            {lessons.map((l, i) => (
               <li key={l.id} className="glass-card rounded-2xl p-5">
                 <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                   <div className="min-w-0">
@@ -204,6 +240,47 @@ export default async function ModuleEditPage({
                         className="mono-label inline-flex items-center gap-1 rounded-full border border-white/20 px-3 py-1 text-on-surface-variant transition-colors hover:border-primary/40 hover:text-primary"
                       >
                         {l.published ? "Unpublish" : "Publish"}
+                      </SubmitButton>
+                    </form>
+
+                    {/* Reorder within this chapter */}
+                    <form action={moveModuleLesson}>
+                      <input type="hidden" name="moduleId" value={mod.id} />
+                      <input type="hidden" name="lessonId" value={l.id} />
+                      <input type="hidden" name="dir" value="up" />
+                      <SubmitButton
+                        aria-label="Move up"
+                        title="Move up"
+                        className="inline-flex items-center justify-center rounded-full border border-white/20 px-2 py-1 text-on-surface-variant transition-colors hover:border-primary/40 hover:text-primary"
+                      >
+                        <span className="material-symbols-outlined text-[16px]">
+                          arrow_upward
+                        </span>
+                      </SubmitButton>
+                    </form>
+                    <form action={moveModuleLesson}>
+                      <input type="hidden" name="moduleId" value={mod.id} />
+                      <input type="hidden" name="lessonId" value={l.id} />
+                      <input type="hidden" name="dir" value="down" />
+                      <SubmitButton
+                        aria-label="Move down"
+                        title="Move down"
+                        className="inline-flex items-center justify-center rounded-full border border-white/20 px-2 py-1 text-on-surface-variant transition-colors hover:border-primary/40 hover:text-primary"
+                      >
+                        <span className="material-symbols-outlined text-[16px]">
+                          arrow_downward
+                        </span>
+                      </SubmitButton>
+                    </form>
+
+                    {/* Detach from this chapter (lesson itself is kept) */}
+                    <form action={detachLessonFromModule}>
+                      <input type="hidden" name="moduleId" value={mod.id} />
+                      <input type="hidden" name="lessonId" value={l.id} />
+                      <SubmitButton
+                        className="mono-label inline-flex items-center gap-1 rounded-full border border-white/20 px-3 py-1 text-on-surface-variant transition-colors hover:border-primary/40 hover:text-primary"
+                      >
+                        Detach from chapter
                       </SubmitButton>
                     </form>
                   </div>
@@ -381,6 +458,57 @@ export default async function ModuleEditPage({
           </ul>
         )}
 
+        {/* Attach an existing library lesson */}
+        <div className="glass-card mt-6 rounded-3xl p-8">
+          <h3 className="text-headline-md mb-4 text-on-surface">
+            Attach existing lesson
+          </h3>
+          {attachableLessons.length === 0 ? (
+            <p className="rounded-2xl border border-dashed border-white/10 bg-surface-container-low p-6 text-on-surface-variant">
+              Every lesson in the library is already attached to this chapter.
+              Create a new one below, or detach one first.
+            </p>
+          ) : (
+            <form
+              action={attachLessonToModule}
+              className="grid grid-cols-1 gap-4 md:grid-cols-12 md:items-end"
+            >
+              <input type="hidden" name="moduleId" value={mod.id} />
+              <label className="md:col-span-9 space-y-2">
+                <span className="mono-label block text-on-surface-variant">
+                  Lesson
+                </span>
+                <select
+                  name="lessonId"
+                  required
+                  defaultValue=""
+                  className="w-full rounded-xl border border-white/10 bg-surface-container-low px-4 py-3 text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+                >
+                  <option value="" disabled>
+                    Choose a lesson to plug in…
+                  </option>
+                  {attachableLessons.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.title}
+                      {l.difficulty ? ` · ${l.difficulty}` : ""}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="md:col-span-3">
+                <SubmitButton
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 font-medium text-on-primary transition-colors hover:bg-primary-container hover:text-on-primary-container"
+                >
+                  <span className="material-symbols-outlined text-[18px]">
+                    link
+                  </span>
+                  Attach to chapter
+                </SubmitButton>
+              </div>
+            </form>
+          )}
+        </div>
+
         {/* Create lesson form */}
         <div className="glass-card mt-6 rounded-3xl p-8">
           <h3 className="text-headline-md mb-4 text-on-surface">
@@ -407,7 +535,7 @@ export default async function ModuleEditPage({
               <input
                 type="number"
                 name="order"
-                defaultValue={mod.lessons.length}
+                defaultValue={lessons.length}
                 min={0}
                 className="w-full rounded-xl border border-white/10 bg-surface-container-low px-4 py-3 text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
               />

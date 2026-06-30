@@ -56,7 +56,7 @@ export default async function DeckPage({
               {lesson.title}
             </div>
             <div className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
-              {lesson.module.title} · slide deck
+              {lesson.module?.title ?? "Lesson"} · slide deck
             </div>
           </div>
         </div>

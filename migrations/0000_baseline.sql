@@ -138,7 +138,7 @@ CREATE TABLE "HackathonConfig" (
 
 CREATE TABLE "Lesson" (
 	"id" text PRIMARY KEY NOT NULL,
-	"moduleId" text NOT NULL,
+	"moduleId" text,
 	"title" text NOT NULL,
 	"summary" text,
 	"body" text DEFAULT '' NOT NULL,
@@ -172,6 +172,14 @@ CREATE TABLE "Module" (
 	"published" boolean DEFAULT false NOT NULL,
 	"createdAt" timestamp (3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
 	"updatedAt" timestamp (3) NOT NULL
+);
+
+CREATE TABLE "ModuleLesson" (
+	"id" text PRIMARY KEY NOT NULL,
+	"moduleId" text NOT NULL,
+	"lessonId" text NOT NULL,
+	"order" integer DEFAULT 0 NOT NULL,
+	"createdAt" timestamp (3) DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
 CREATE TABLE "Progress" (
@@ -415,7 +423,6 @@ ALTER TABLE "BlogPost" ADD CONSTRAINT "BlogPost_authorId_fkey" FOREIGN KEY ("aut
 ALTER TABLE "BlogPost" ADD CONSTRAINT "BlogPost_taggedTeamId_fkey" FOREIGN KEY ("taggedTeamId") REFERENCES "public"."Team"("id") ON DELETE set null ON UPDATE cascade;
 ALTER TABLE "BuildLogEntry" ADD CONSTRAINT "BuildLogEntry_authorId_fkey" FOREIGN KEY ("authorId") REFERENCES "public"."User"("id") ON DELETE cascade ON UPDATE cascade;
 ALTER TABLE "BuildLogEntry" ADD CONSTRAINT "BuildLogEntry_teamId_fkey" FOREIGN KEY ("teamId") REFERENCES "public"."Team"("id") ON DELETE cascade ON UPDATE cascade;
-ALTER TABLE "Cohort" ADD CONSTRAINT "Cohort_ownerId_fkey" FOREIGN KEY ("ownerId") REFERENCES "public"."User"("id") ON DELETE set null ON UPDATE cascade;
 ALTER TABLE "CohortPost" ADD CONSTRAINT "CohortPost_authorId_fkey" FOREIGN KEY ("authorId") REFERENCES "public"."User"("id") ON DELETE cascade ON UPDATE cascade;
 ALTER TABLE "CohortPost" ADD CONSTRAINT "CohortPost_cohortId_fkey" FOREIGN KEY ("cohortId") REFERENCES "public"."Cohort"("id") ON DELETE cascade ON UPDATE cascade;
 ALTER TABLE "Comment" ADD CONSTRAINT "Comment_authorId_fkey" FOREIGN KEY ("authorId") REFERENCES "public"."User"("id") ON DELETE cascade ON UPDATE cascade;
@@ -430,8 +437,10 @@ ALTER TABLE "EarnedBadge" ADD CONSTRAINT "EarnedBadge_userId_fkey" FOREIGN KEY (
 ALTER TABLE "EarnedBadge" ADD CONSTRAINT "EarnedBadge_cohortId_fkey" FOREIGN KEY ("cohortId") REFERENCES "public"."Cohort"("id") ON DELETE set null ON UPDATE cascade;
 ALTER TABLE "FeaturedBuilder" ADD CONSTRAINT "FeaturedBuilder_userId_fkey" FOREIGN KEY ("userId") REFERENCES "public"."User"("id") ON DELETE cascade ON UPDATE cascade;
 ALTER TABLE "HackathonConfig" ADD CONSTRAINT "HackathonConfig_cohortId_fkey" FOREIGN KEY ("cohortId") REFERENCES "public"."Cohort"("id") ON DELETE cascade ON UPDATE cascade;
-ALTER TABLE "Lesson" ADD CONSTRAINT "Lesson_moduleId_fkey" FOREIGN KEY ("moduleId") REFERENCES "public"."Module"("id") ON DELETE cascade ON UPDATE cascade;
+ALTER TABLE "Lesson" ADD CONSTRAINT "Lesson_moduleId_fkey" FOREIGN KEY ("moduleId") REFERENCES "public"."Module"("id") ON DELETE set null ON UPDATE cascade;
 ALTER TABLE "LookingForTeam" ADD CONSTRAINT "LookingForTeam_userId_fkey" FOREIGN KEY ("userId") REFERENCES "public"."User"("id") ON DELETE cascade ON UPDATE cascade;
+ALTER TABLE "ModuleLesson" ADD CONSTRAINT "ModuleLesson_moduleId_fkey" FOREIGN KEY ("moduleId") REFERENCES "public"."Module"("id") ON DELETE cascade ON UPDATE cascade;
+ALTER TABLE "ModuleLesson" ADD CONSTRAINT "ModuleLesson_lessonId_fkey" FOREIGN KEY ("lessonId") REFERENCES "public"."Lesson"("id") ON DELETE cascade ON UPDATE cascade;
 ALTER TABLE "Progress" ADD CONSTRAINT "Progress_lessonId_fkey" FOREIGN KEY ("lessonId") REFERENCES "public"."Lesson"("id") ON DELETE cascade ON UPDATE cascade;
 ALTER TABLE "Progress" ADD CONSTRAINT "Progress_userId_fkey" FOREIGN KEY ("userId") REFERENCES "public"."User"("id") ON DELETE cascade ON UPDATE cascade;
 ALTER TABLE "ProjectComment" ADD CONSTRAINT "ProjectComment_authorId_fkey" FOREIGN KEY ("authorId") REFERENCES "public"."User"("id") ON DELETE cascade ON UPDATE cascade;
@@ -491,6 +500,9 @@ CREATE UNIQUE INDEX "HackathonConfig_cohortId_key" ON "HackathonConfig" USING bt
 CREATE INDEX "Lesson_moduleId_order_idx" ON "Lesson" USING btree ("moduleId" int4_ops,"order" int4_ops);
 CREATE UNIQUE INDEX "LookingForTeam_userId_key" ON "LookingForTeam" USING btree ("userId" uuid_ops);
 CREATE INDEX "Module_order_idx" ON "Module" USING btree ("order" int4_ops);
+CREATE UNIQUE INDEX "ModuleLesson_moduleId_lessonId_key" ON "ModuleLesson" USING btree ("moduleId" text_ops,"lessonId" text_ops);
+CREATE INDEX "ModuleLesson_moduleId_order_idx" ON "ModuleLesson" USING btree ("moduleId" text_ops,"order" int4_ops);
+CREATE INDEX "ModuleLesson_lessonId_idx" ON "ModuleLesson" USING btree ("lessonId" text_ops);
 CREATE INDEX "Progress_userId_idx" ON "Progress" USING btree ("userId" uuid_ops);
 CREATE UNIQUE INDEX "Progress_userId_lessonId_key" ON "Progress" USING btree ("userId" text_ops,"lessonId" text_ops);
 CREATE INDEX "ProjectComment_teamId_createdAt_idx" ON "ProjectComment" USING btree ("teamId" text_ops,"createdAt" text_ops);
