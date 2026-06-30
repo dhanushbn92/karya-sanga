@@ -185,6 +185,21 @@ export async function updateLesson(formData: FormData): Promise<void> {
   revalidatePath("/lessons");
 }
 
+export async function setLessonPublished(formData: FormData): Promise<void> {
+  await requireRole(["admin", "instructor"]);
+  const id = String(formData.get("id") ?? "");
+  const moduleId = String(formData.get("moduleId") ?? "");
+  if (!id) fail("Missing id");
+  const published = formData.get("published") === "on";
+  await db
+    .update(lesson)
+    .set({ published, updatedAt: new Date() })
+    .where(eq(lesson.id, id));
+  if (moduleId) revalidatePath(`/admin/modules/${moduleId}`);
+  revalidatePath("/lessons");
+  revalidatePath(`/lessons/${id}`);
+}
+
 export async function deleteLesson(formData: FormData): Promise<void> {
   await requireRole(["admin", "instructor"]);
   const id = String(formData.get("id") ?? "");

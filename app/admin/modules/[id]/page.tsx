@@ -5,7 +5,10 @@ import { requireRole } from "@/lib/auth";
 import { db, module as moduleTable } from "@/lib/db";
 import {
   createLesson,
+  deleteLesson,
   deleteModule,
+  setLessonPublished,
+  updateLesson,
   updateModule,
 } from "@/lib/actions/admin-lessons";
 import { UploadSlideFile } from "@/components/lessons/upload-slide-file";
@@ -188,8 +191,163 @@ export default async function ModuleEditPage({
                     >
                       Preview
                     </Link>
+                    {/* One-click publish toggle */}
+                    <form action={setLessonPublished}>
+                      <input type="hidden" name="id" value={l.id} />
+                      <input type="hidden" name="moduleId" value={mod.id} />
+                      <input
+                        type="hidden"
+                        name="published"
+                        value={l.published ? "" : "on"}
+                      />
+                      <SubmitButton
+                        className="mono-label inline-flex items-center gap-1 rounded-full border border-white/20 px-3 py-1 text-on-surface-variant transition-colors hover:border-primary/40 hover:text-primary"
+                      >
+                        {l.published ? "Unpublish" : "Publish"}
+                      </SubmitButton>
+                    </form>
                   </div>
                 </div>
+
+                {/* Edit (collapsible) */}
+                <details className="mt-4 border-t border-white/5 pt-4">
+                  <summary className="mono-label cursor-pointer text-on-surface-variant hover:text-primary">
+                    Edit
+                  </summary>
+                  <form
+                    action={updateLesson}
+                    className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-12"
+                  >
+                    <input type="hidden" name="id" value={l.id} />
+                    <input type="hidden" name="moduleId" value={mod.id} />
+                    <label className="md:col-span-8 space-y-2">
+                      <span className="mono-label block text-on-surface-variant">
+                        Title
+                      </span>
+                      <input
+                        type="text"
+                        name="title"
+                        defaultValue={l.title}
+                        required
+                        className="w-full rounded-xl border border-white/10 bg-surface-container-low px-4 py-3 text-on-surface placeholder:text-on-surface-variant/40 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      />
+                    </label>
+                    <label className="md:col-span-2 space-y-2">
+                      <span className="mono-label block text-on-surface-variant">
+                        Order
+                      </span>
+                      <input
+                        type="number"
+                        name="order"
+                        defaultValue={l.order}
+                        min={0}
+                        className="w-full rounded-xl border border-white/10 bg-surface-container-low px-4 py-3 text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      />
+                    </label>
+                    <label className="md:col-span-2 space-y-2">
+                      <span className="mono-label block text-on-surface-variant">
+                        Difficulty
+                      </span>
+                      <select
+                        name="difficulty"
+                        defaultValue={l.difficulty ?? ""}
+                        className="w-full rounded-xl border border-white/10 bg-surface-container-low px-4 py-3 text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      >
+                        <option value="">—</option>
+                        <option value="Easy">Easy</option>
+                        <option value="Medium">Medium</option>
+                        <option value="Hard">Hard</option>
+                      </select>
+                    </label>
+                    <label className="md:col-span-12 space-y-2">
+                      <span className="mono-label block text-on-surface-variant">
+                        Summary
+                      </span>
+                      <input
+                        type="text"
+                        name="summary"
+                        defaultValue={l.summary ?? ""}
+                        placeholder="One-line description"
+                        className="w-full rounded-xl border border-white/10 bg-surface-container-low px-4 py-3 text-on-surface placeholder:text-on-surface-variant/40 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      />
+                    </label>
+                    <label className="md:col-span-12 space-y-2">
+                      <span className="mono-label block text-on-surface-variant">
+                        Body (Markdown — supports GFM, code blocks, and slide
+                        separators)
+                      </span>
+                      <textarea
+                        name="body"
+                        rows={10}
+                        defaultValue={l.body ?? ""}
+                        className="w-full rounded-xl border border-white/10 bg-surface-container-low px-4 py-3 font-mono text-sm text-on-surface placeholder:text-on-surface-variant/40 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      />
+                    </label>
+                    <label className="md:col-span-6 space-y-2">
+                      <span className="mono-label block text-on-surface-variant">
+                        Wokwi project URL (optional · opens in a new tab)
+                      </span>
+                      <input
+                        type="url"
+                        name="wokwiProjectUrl"
+                        defaultValue={l.wokwiProjectUrl ?? ""}
+                        placeholder="https://wokwi.com/projects/123456789"
+                        className="w-full rounded-xl border border-white/10 bg-surface-container-low px-4 py-3 text-on-surface placeholder:text-on-surface-variant/40 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      />
+                    </label>
+                    <label className="md:col-span-3 space-y-2">
+                      <span className="mono-label block text-on-surface-variant">
+                        External slides URL (optional)
+                      </span>
+                      <input
+                        type="url"
+                        name="slidesUrl"
+                        defaultValue={l.slidesUrl ?? ""}
+                        placeholder="Google Slides / PDF link"
+                        className="w-full rounded-xl border border-white/10 bg-surface-container-low px-4 py-3 text-on-surface placeholder:text-on-surface-variant/40 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      />
+                    </label>
+                    <label
+                      htmlFor={`lesson-published-${l.id}`}
+                      className="md:col-span-3 flex items-end gap-3 pb-2"
+                    >
+                      <input
+                        id={`lesson-published-${l.id}`}
+                        type="checkbox"
+                        name="published"
+                        defaultChecked={l.published}
+                        className="h-5 w-5 rounded border border-white/20 bg-surface-container-low text-primary focus:ring-primary"
+                      />
+                      <span className="mono-label text-on-surface-variant">
+                        Published
+                      </span>
+                    </label>
+                    <div className="md:col-span-12">
+                      <SubmitButton
+                        className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2 font-medium text-on-primary transition-colors hover:bg-primary-container hover:text-on-primary-container"
+                      >
+                        <span className="material-symbols-outlined text-[18px]">
+                          save
+                        </span>
+                        Save changes
+                      </SubmitButton>
+                    </div>
+                  </form>
+
+                  {/* Delete lesson */}
+                  <form action={deleteLesson} className="mt-4">
+                    <input type="hidden" name="id" value={l.id} />
+                    <input type="hidden" name="moduleId" value={mod.id} />
+                    <SubmitButton
+                      className="mono-label inline-flex items-center gap-2 rounded-full border border-destructive/40 px-4 py-1.5 text-destructive transition-colors hover:bg-destructive/10"
+                    >
+                      <span className="material-symbols-outlined text-[14px]">
+                        delete
+                      </span>
+                      Delete
+                    </SubmitButton>
+                  </form>
+                </details>
 
                 {/* Slide file uploader, per-lesson */}
                 <div className="mt-4 border-t border-white/5 pt-4">
