@@ -18,7 +18,12 @@ import {
   userCohort,
   workshopFeedback,
 } from "@/lib/db";
-import { requireRole, requireUser } from "@/lib/auth";
+import {
+  canManageWorkshop,
+  requireRole,
+  requireUser,
+  requireWorkshopManager,
+} from "@/lib/auth";
 
 /**
  * Server actions for the Builders / Alumni platform (per spec).
@@ -160,7 +165,6 @@ export async function createCohort(formData: FormData): Promise<void> {
 const updateCohortSchema = cohortSchema.extend({ id: z.string().min(1) });
 
 export async function updateCohort(formData: FormData): Promise<void> {
-  await requireRole(["admin", "instructor"]);
   const parsed = updateCohortSchema.safeParse({
     id: formData.get("id"),
     name: formData.get("name"),
@@ -172,6 +176,7 @@ export async function updateCohort(formData: FormData): Promise<void> {
   if (!parsed.success) {
     throw new Error(parsed.error.issues[0]?.message ?? "Invalid input");
   }
+  await requireWorkshopManager(parsed.data.id);
 
   if (parsed.data.current) {
     await db
@@ -197,9 +202,9 @@ export async function updateCohort(formData: FormData): Promise<void> {
 }
 
 export async function deleteCohort(formData: FormData): Promise<void> {
-  await requireRole(["admin", "instructor"]);
   const id = String(formData.get("id") ?? "");
   if (!id) throw new Error("Missing id");
+  await requireWorkshopManager(id);
   await db.delete(cohort).where(eq(cohort.id, id));
   revalidatePath("/admin/cohorts");
   revalidatePath("/builders");
@@ -214,12 +219,19 @@ const assignCohortSchema = z.object({
 export async function adminAssignUserToCohort(
   formData: FormData,
 ): Promise<void> {
-  await requireRole(["admin", "instructor"]);
   const parsed = assignCohortSchema.safeParse({
     userId: formData.get("userId"),
     cohortId: formData.get("cohortId") ?? "",
   });
   if (!parsed.success) throw new Error("Invalid input");
+
+  // Assigning into a workshop → must manage that workshop. Clearing a user's
+  // primary workshop is a platform-level move → admin only.
+  if (parsed.data.cohortId) {
+    await requireWorkshopManager(parsed.data.cohortId);
+  } else {
+    await requireRole(["admin"]);
+  }
 
   await db
     .update(user)
@@ -227,6 +239,58 @@ export async function adminAssignUserToCohort(
     .where(eq(user.id, parsed.data.userId));
   revalidatePath("/admin/cohorts");
   revalidatePath("/builders");
+}
+
+/**
+ * Assign (or clear) a workshop's owner. Only an admin or the current owner can
+ * change it. The new owner is auto-enrolled in the workshop so they pass the
+ * member checks and appear in the roster.
+ */
+export async function setWorkshopOwner(formData: FormData): Promise<void> {
+  const me = await requireUser();
+  const cohortId = String(formData.get("cohortId") ?? "");
+  const userId = String(formData.get("userId") ?? ""); // "" clears the owner
+  if (!cohortId) throw new Error("Missing workshop");
+
+  const c = await db.query.cohort.findFirst({
+    where: eq(cohort.id, cohortId),
+    columns: { ownerId: true },
+  });
+  if (!c) throw new Error("Workshop not found");
+  if (me.role !== "admin" && c.ownerId !== me.id) {
+    throw new Error("Only an admin or the current owner can change the owner.");
+  }
+
+  const newOwnerId = userId || null;
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(cohort)
+      .set({ ownerId: newOwnerId, updatedAt: new Date() })
+      .where(eq(cohort.id, cohortId));
+
+    if (newOwnerId) {
+      const isPrimary = await tx.query.user.findFirst({
+        where: and(eq(user.id, newOwnerId), eq(user.cohortId, cohortId)),
+        columns: { id: true },
+      });
+      const isSecondary = await tx.query.userCohort.findFirst({
+        where: and(
+          eq(userCohort.userId, newOwnerId),
+          eq(userCohort.cohortId, cohortId),
+        ),
+        columns: { id: true },
+      });
+      if (!isPrimary && !isSecondary) {
+        await tx
+          .insert(userCohort)
+          .values({ id: createId(), userId: newOwnerId, cohortId });
+      }
+    }
+  });
+
+  revalidatePath(`/admin/cohorts/${cohortId}`);
+  revalidatePath("/admin/cohorts");
 }
 
 // =====================================================================
@@ -248,9 +312,10 @@ export async function createCohortPost(formData: FormData): Promise<void> {
     throw new Error(parsed.error.issues[0]?.message ?? "Invalid input");
   }
 
-  // Cohort membership check — anyone on the cohort can post.
-  // Admin / instructor can post in any cohort (e.g. instructor recap).
-  const isMod = me.role === "admin" || me.role === "instructor";
+  // Cohort membership check — anyone on the cohort can post. Workshop
+  // managers (admin, owner, enrolled instructor) can post in their workshop
+  // too (e.g. instructor recap), but a stray instructor can't post anywhere.
+  const isMod = await canManageWorkshop(me, parsed.data.cohortId);
   if (!isMod) {
     const u = await db.query.user.findFirst({
       where: eq(user.id, me.id),
@@ -282,7 +347,9 @@ export async function deleteCohortPost(formData: FormData): Promise<void> {
   });
   if (!post) throw new Error("Post not found");
 
-  const isMod = me.role === "admin" || me.role === "instructor";
+  // Author can delete their own post; otherwise only a manager of THIS
+  // workshop (admin, owner, enrolled instructor) — not any instructor.
+  const isMod = await canManageWorkshop(me, post.cohortId);
   if (!isMod && post.authorId !== me.id) {
     throw new Error("Not allowed");
   }
@@ -292,9 +359,17 @@ export async function deleteCohortPost(formData: FormData): Promise<void> {
 }
 
 export async function pinCohortPost(formData: FormData): Promise<void> {
-  await requireRole(["admin", "instructor"]);
   const id = String(formData.get("id") ?? "");
   const pinned = formData.get("pinned") === "on";
+
+  // Resolve the post's workshop first, then check the scoped gate.
+  const existing = await db.query.cohortPost.findFirst({
+    where: eq(cohortPost.id, id),
+    columns: { cohortId: true },
+  });
+  if (!existing) throw new Error("Post not found");
+  await requireWorkshopManager(existing.cohortId);
+
   const [post] = await db
     .update(cohortPost)
     .set({ pinned, updatedAt: new Date() })
@@ -466,7 +541,7 @@ const awardSchema = z.object({
 });
 
 export async function adminAwardBadge(formData: FormData): Promise<void> {
-  const me = await requireRole(["admin", "instructor"]);
+  const me = await requireUser();
   const parsed = awardSchema.safeParse({
     userId: formData.get("userId"),
     badgeSlug: formData.get("badgeSlug"),
@@ -480,31 +555,13 @@ export async function adminAwardBadge(formData: FormData): Promise<void> {
   });
   if (!badgeRow) throw new Error("Unknown badge");
 
-  // If the badge is scoped to a specific workshop, only admins or the
-  // teachers of THAT workshop can award it. Admins bypass; instructors must
-  // be members of the cohort (primary FK or UserCohort secondary).
-  if (badgeRow.cohortId && me.role !== "admin") {
-    const badgeCohortId = badgeRow.cohortId;
-    // Primary FK membership: User.cohortId === badge.cohortId
-    const primary = await db.query.user.findFirst({
-      where: and(eq(user.id, me.id), eq(user.cohortId, badgeCohortId)),
-      columns: { id: true },
-    });
-    // Secondary membership via the UserCohort join.
-    const secondary = primary
-      ? undefined
-      : await db.query.userCohort.findFirst({
-          where: and(
-            eq(userCohort.userId, me.id),
-            eq(userCohort.cohortId, badgeCohortId),
-          ),
-          columns: { id: true },
-        });
-    if (!primary && !secondary) {
-      throw new Error(
-        "You can only award this badge in the workshop it belongs to.",
-      );
-    }
+  // Workshop-scoped badge → only a manager of THAT workshop (admin, owner, or
+  // enrolled instructor) may award it. General/platform badge → any
+  // admin/instructor.
+  if (badgeRow.cohortId) {
+    await requireWorkshopManager(badgeRow.cohortId);
+  } else {
+    await requireRole(["admin", "instructor"]);
   }
 
   // A badge can be earned multiple times. Each award is its own row, tagged
@@ -524,9 +581,21 @@ export async function adminAwardBadge(formData: FormData): Promise<void> {
 }
 
 export async function adminRevokeBadge(formData: FormData): Promise<void> {
-  await requireRole(["admin", "instructor"]);
+  await requireUser();
   const id = String(formData.get("id") ?? "");
   if (!id) throw new Error("Missing id");
+  // Scope to the workshop the award belongs to (mirrors adminAwardBadge);
+  // general/platform awards stay admin/instructor.
+  const row = await db.query.earnedBadge.findFirst({
+    where: eq(earnedBadge.id, id),
+    columns: { cohortId: true },
+  });
+  if (!row) return;
+  if (row.cohortId) {
+    await requireWorkshopManager(row.cohortId);
+  } else {
+    await requireRole(["admin", "instructor"]);
+  }
   await db.delete(earnedBadge).where(eq(earnedBadge.id, id));
   revalidatePath("/builders");
   revalidatePath("/admin/badges");
@@ -628,7 +697,6 @@ const workshopBadgeSchema = z.object({
 export async function createWorkshopBadge(
   formData: FormData,
 ): Promise<void> {
-  await requireRole(["admin", "instructor"]);
   const parsed = workshopBadgeSchema.safeParse({
     cohortId: formData.get("cohortId"),
     slug: String(formData.get("slug") ?? "").toLowerCase(),
@@ -640,6 +708,7 @@ export async function createWorkshopBadge(
   if (!parsed.success) {
     throw new Error(parsed.error.issues[0]?.message ?? "Invalid input");
   }
+  await requireWorkshopManager(parsed.data.cohortId);
 
   await db.insert(badge).values({
     id: createId(),
@@ -660,10 +729,23 @@ export async function createWorkshopBadge(
 export async function deleteWorkshopBadge(
   formData: FormData,
 ): Promise<void> {
-  await requireRole(["admin", "instructor"]);
   const id = String(formData.get("id") ?? "");
   const cohortId = String(formData.get("cohortId") ?? "");
   if (!id) throw new Error("Missing id");
+
+  // Resolve the badge's workshop from the row, not the form. A workshop badge
+  // is gated by its workshop; a general/platform badge is admin-only.
+  const badgeRow = await db.query.badge.findFirst({
+    where: eq(badge.id, id),
+    columns: { cohortId: true },
+  });
+  if (!badgeRow) throw new Error("Unknown badge");
+  if (badgeRow.cohortId) {
+    await requireWorkshopManager(badgeRow.cohortId);
+  } else {
+    await requireRole(["admin"]);
+  }
+
   await db.delete(badge).where(eq(badge.id, id));
   revalidatePath(`/admin/cohorts/${cohortId}`);
   revalidatePath("/admin/badges");
@@ -688,12 +770,12 @@ const multiAssignSchema = z.object({
 export async function addUserToWorkshop(
   formData: FormData,
 ): Promise<void> {
-  await requireRole(["admin", "instructor"]);
   const parsed = multiAssignSchema.safeParse({
     userId: formData.get("userId"),
     cohortId: formData.get("cohortId"),
   });
   if (!parsed.success) throw new Error("Invalid input");
+  await requireWorkshopManager(parsed.data.cohortId);
 
   await db
     .insert(userCohort)
@@ -809,12 +891,12 @@ export async function leaveWorkshop(formData: FormData): Promise<void> {
 export async function removeUserFromWorkshop(
   formData: FormData,
 ): Promise<void> {
-  await requireRole(["admin", "instructor"]);
   const parsed = multiAssignSchema.safeParse({
     userId: formData.get("userId"),
     cohortId: formData.get("cohortId"),
   });
   if (!parsed.success) throw new Error("Invalid input");
+  await requireWorkshopManager(parsed.data.cohortId);
 
   await db
     .delete(userCohort)

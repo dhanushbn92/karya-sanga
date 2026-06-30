@@ -13,7 +13,7 @@ import {
   lookingForTeam,
   user,
 } from "@/lib/db";
-import { requireRole } from "@/lib/auth";
+import { requireRole, requireWorkshopManager } from "@/lib/auth";
 
 /**
  * Instructor-only team management.
@@ -487,7 +487,6 @@ const workshopConfigSchema = z.object({
 export async function setWorkshopHackathonConfig(
   formData: FormData,
 ): Promise<void> {
-  await requireRole(["admin", "instructor"]);
   const parsed = workshopConfigSchema.safeParse({
     cohortId: formData.get("cohortId"),
     maxTeamSize: formData.get("maxTeamSize"),
@@ -498,6 +497,7 @@ export async function setWorkshopHackathonConfig(
   if (!parsed.success) {
     throw new Error(parsed.error.issues[0]?.message ?? "Invalid input");
   }
+  await requireWorkshopManager(parsed.data.cohortId);
 
   // datetime-local input gives "YYYY-MM-DDTHH:mm" — empty string clears.
   const submitBy = parsed.data.submitBy
@@ -537,9 +537,9 @@ export async function setWorkshopHackathonConfig(
 export async function clearWorkshopHackathonConfig(
   formData: FormData,
 ): Promise<void> {
-  await requireRole(["admin", "instructor"]);
   const cohortId = String(formData.get("cohortId") ?? "");
   if (!cohortId) throw new Error("Missing workshop");
+  await requireWorkshopManager(cohortId);
   await db
     .delete(hackathonConfig)
     .where(eq(hackathonConfig.cohortId, cohortId))

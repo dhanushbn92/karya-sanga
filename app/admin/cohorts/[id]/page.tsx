@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { and, eq, inArray, or, isNull } from "drizzle-orm";
-import { requireRole } from "@/lib/auth";
+import { requireWorkshopManager } from "@/lib/auth";
 import {
   db,
   cohort as cohortTable,
@@ -21,6 +21,7 @@ import {
   deleteCohort,
   deleteWorkshopBadge,
   removeUserFromWorkshop,
+  setWorkshopOwner,
   updateCohort,
 } from "@/lib/actions/alumni";
 import { bulkAddPeopleToWorkshop } from "@/lib/actions/bulk-people";
@@ -61,8 +62,10 @@ export default async function CohortEditPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ bulk?: string }>;
 }) {
-  await requireRole(["admin", "instructor"]);
   const { id } = await params;
+  // Scoped: admins, the workshop owner, or an instructor enrolled in it. 404s
+  // for anyone else (don't leak the workshop's existence).
+  const me = await requireWorkshopManager(id);
   const { bulk } = await searchParams;
   const bulkResults = decodeBulkResults(bulk);
 
@@ -254,6 +257,14 @@ export default async function CohortEditPage({
 
   const unassigned = allUsers.filter((u) => u.cohortId === null);
 
+  // The owner is always enrolled, so they're in the members list.
+  const owner = cohort.ownerId
+    ? cohort.members.find((m) => m.id === cohort.ownerId)
+    : undefined;
+  // Everyone who can see the page sees WHO the owner is; only an admin or the
+  // current owner gets the form to change it.
+  const canChangeOwner = me.role === "admin" || cohort.ownerId === me.id;
+
   return (
     <main className="mx-auto w-full max-w-[1280px] flex-1 px-4 md:px-16 py-12">
       <Link
@@ -357,6 +368,52 @@ export default async function CohortEditPage({
             Delete workshop (members are removed)
           </SubmitButton>
         </form>
+      </section>
+
+      {/* Workshop owner */}
+      <section className="glass-card mt-10 rounded-3xl p-8">
+        <h2 className="text-headline-md mb-1 text-on-surface">
+          Workshop owner
+        </h2>
+        <p className="mb-4 text-sm text-on-surface-variant">
+          The owner can manage this workshop even without being an admin. The
+          chosen owner is auto-enrolled as a member.
+        </p>
+        <p className="mb-4 text-on-surface">
+          {owner
+            ? `Current owner: ${owner.name ?? owner.email}`
+            : "No owner assigned"}
+        </p>
+        {canChangeOwner && (
+          <form action={setWorkshopOwner} className="flex flex-wrap items-end gap-3">
+            <input type="hidden" name="cohortId" value={cohort.id} />
+            <label className="space-y-2">
+              <span className="mono-label block text-on-surface-variant">
+                Owner
+              </span>
+              <select
+                name="userId"
+                defaultValue={cohort.ownerId ?? ""}
+                className="min-w-[280px] rounded-xl border border-white/10 bg-surface-container-low px-4 py-2 text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+              >
+                <option value="">— No owner —</option>
+                {cohort.members.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name ?? m.email}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <SubmitButton
+              className="mono-label inline-flex items-center gap-1 rounded-full bg-primary px-4 py-2 text-on-primary hover:brightness-110"
+            >
+              <span className="material-symbols-outlined text-[14px]">
+                save
+              </span>
+              Save owner
+            </SubmitButton>
+          </form>
+        )}
       </section>
 
       {/* Roster */}

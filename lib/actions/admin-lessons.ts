@@ -6,7 +6,7 @@ import { z } from "zod";
 import { and, asc, desc, eq } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import { db, module, lesson, workshopModule } from "@/lib/db";
-import { requireRole } from "@/lib/auth";
+import { requireRole, requireWorkshopManager } from "@/lib/auth";
 import { deleteLessonSlide } from "@/lib/supabase/admin";
 
 /**
@@ -325,13 +325,13 @@ const attachModuleSchema = z.object({
 export async function attachModuleToCohort(
   formData: FormData,
 ): Promise<void> {
-  await requireRole(["admin", "instructor"]);
   const parsed = attachModuleSchema.safeParse({
     cohortId: formData.get("cohortId"),
     moduleId: formData.get("moduleId"),
   });
   if (!parsed.success) throw new Error("Invalid input");
   const { cohortId, moduleId } = parsed.data;
+  await requireWorkshopManager(cohortId);
 
   const last = await db.query.workshopModule.findFirst({
     where: eq(workshopModule.cohortId, cohortId),
@@ -355,13 +355,13 @@ export async function attachModuleToCohort(
 export async function detachModuleFromCohort(
   formData: FormData,
 ): Promise<void> {
-  await requireRole(["admin", "instructor"]);
   const parsed = attachModuleSchema.safeParse({
     cohortId: formData.get("cohortId"),
     moduleId: formData.get("moduleId"),
   });
   if (!parsed.success) throw new Error("Invalid input");
   const { cohortId, moduleId } = parsed.data;
+  await requireWorkshopManager(cohortId);
 
   await db
     .delete(workshopModule)
@@ -390,7 +390,6 @@ const moveSchema = z.object({
 export async function moveAttachedModule(
   formData: FormData,
 ): Promise<void> {
-  await requireRole(["admin", "instructor"]);
   const parsed = moveSchema.safeParse({
     cohortId: formData.get("cohortId"),
     moduleId: formData.get("moduleId"),
@@ -398,6 +397,7 @@ export async function moveAttachedModule(
   });
   if (!parsed.success) throw new Error("Invalid input");
   const { cohortId, moduleId, direction } = parsed.data;
+  await requireWorkshopManager(cohortId);
 
   const items = await db.query.workshopModule.findMany({
     where: eq(workshopModule.cohortId, cohortId),

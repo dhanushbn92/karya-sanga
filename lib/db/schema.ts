@@ -17,10 +17,18 @@ export const cohort = pgTable("Cohort", {
 	current: boolean().default(false).notNull(),
 	createdAt: timestamp({ precision: 3, mode: 'date' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
 	updatedAt: timestamp({ precision: 3, mode: 'date' }).notNull(),
+	// The workshop's owner — has full management control of this workshop
+	// regardless of their global role.
+	ownerId: uuid(),
 }, (table) => [
 	index("Cohort_current_idx").using("btree", table.current.asc().nullsLast().op("bool_ops")),
 	uniqueIndex("Cohort_name_key").using("btree", table.name.asc().nullsLast().op("text_ops")),
 	index("Cohort_startedOn_idx").using("btree", table.startedOn.asc().nullsLast().op("timestamp_ops")),
+	index("Cohort_ownerId_idx").using("btree", table.ownerId.asc().nullsLast().op("uuid_ops")),
+	// NOTE: the FK Cohort.ownerId -> User.id exists in the DB (migration 0002)
+	// but is intentionally NOT declared here. Declaring a second Cohort->User
+	// foreign key makes Drizzle's relational-query type inference ambiguous for
+	// the existing cohort<->user relation, breaking db.query types app-wide.
 ]);
 
 export const badge = pgTable("Badge", {

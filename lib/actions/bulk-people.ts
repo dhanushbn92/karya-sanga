@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import { db, user, cohort, userCohort } from "@/lib/db";
-import { requireRole } from "@/lib/auth";
+import { requireWorkshopManager } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
@@ -95,10 +95,10 @@ function parseRow(line: string): {
 export async function bulkAddPeopleToWorkshop(
   formData: FormData,
 ): Promise<void> {
-  await requireRole(["admin", "instructor"]);
   const cohortId = String(formData.get("cohortId") ?? "");
   const raw = String(formData.get("rows") ?? "");
   if (!cohortId) throw new Error("Missing workshop");
+  await requireWorkshopManager(cohortId);
 
   // Confirm cohort exists (avoids leaking IDs).
   const cohortRow = await db.query.cohort.findFirst({

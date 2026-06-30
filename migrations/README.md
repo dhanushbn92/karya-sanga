@@ -32,6 +32,7 @@ them as the canonical full-schema SQL.
 |---|------|---------|---------|
 | 0000 | `0000_baseline.sql` | n/a (snapshot) | Full schema baseline (regenerate with `npx drizzle-kit export`). |
 | 0001 | `0001_workshop-feedback-and-multi-badges.sql` | ☑ | Allow a badge to be earned multiple times + tie awards to a workshop (`EarnedBadge.cohortId`); add `WorkshopFeedback` (per-user workshop rating + comment). |
+| 0002 | `0002_workshop-owner.sql` | ☐ | Add `Cohort.ownerId` — a workshop owner with scoped management control. |
 
 ## Workflow for a new schema change
 

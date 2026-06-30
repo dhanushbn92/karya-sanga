@@ -64,7 +64,8 @@ CREATE TABLE "Cohort" (
 	"description" text,
 	"current" boolean DEFAULT false NOT NULL,
 	"createdAt" timestamp (3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
-	"updatedAt" timestamp (3) NOT NULL
+	"updatedAt" timestamp (3) NOT NULL,
+	"ownerId" uuid
 );
 
 CREATE TABLE "CohortPost" (
@@ -414,6 +415,7 @@ ALTER TABLE "BlogPost" ADD CONSTRAINT "BlogPost_authorId_fkey" FOREIGN KEY ("aut
 ALTER TABLE "BlogPost" ADD CONSTRAINT "BlogPost_taggedTeamId_fkey" FOREIGN KEY ("taggedTeamId") REFERENCES "public"."Team"("id") ON DELETE set null ON UPDATE cascade;
 ALTER TABLE "BuildLogEntry" ADD CONSTRAINT "BuildLogEntry_authorId_fkey" FOREIGN KEY ("authorId") REFERENCES "public"."User"("id") ON DELETE cascade ON UPDATE cascade;
 ALTER TABLE "BuildLogEntry" ADD CONSTRAINT "BuildLogEntry_teamId_fkey" FOREIGN KEY ("teamId") REFERENCES "public"."Team"("id") ON DELETE cascade ON UPDATE cascade;
+ALTER TABLE "Cohort" ADD CONSTRAINT "Cohort_ownerId_fkey" FOREIGN KEY ("ownerId") REFERENCES "public"."User"("id") ON DELETE set null ON UPDATE cascade;
 ALTER TABLE "CohortPost" ADD CONSTRAINT "CohortPost_authorId_fkey" FOREIGN KEY ("authorId") REFERENCES "public"."User"("id") ON DELETE cascade ON UPDATE cascade;
 ALTER TABLE "CohortPost" ADD CONSTRAINT "CohortPost_cohortId_fkey" FOREIGN KEY ("cohortId") REFERENCES "public"."Cohort"("id") ON DELETE cascade ON UPDATE cascade;
 ALTER TABLE "Comment" ADD CONSTRAINT "Comment_authorId_fkey" FOREIGN KEY ("authorId") REFERENCES "public"."User"("id") ON DELETE cascade ON UPDATE cascade;
@@ -473,6 +475,7 @@ CREATE INDEX "BuildLogEntry_teamId_createdAt_idx" ON "BuildLogEntry" USING btree
 CREATE INDEX "Cohort_current_idx" ON "Cohort" USING btree ("current" bool_ops);
 CREATE UNIQUE INDEX "Cohort_name_key" ON "Cohort" USING btree ("name" text_ops);
 CREATE INDEX "Cohort_startedOn_idx" ON "Cohort" USING btree ("startedOn" timestamp_ops);
+CREATE INDEX "Cohort_ownerId_idx" ON "Cohort" USING btree ("ownerId" uuid_ops);
 CREATE INDEX "CohortPost_cohortId_pinned_createdAt_idx" ON "CohortPost" USING btree ("cohortId" text_ops,"pinned" bool_ops,"createdAt" bool_ops);
 CREATE INDEX "Comment_postId_createdAt_idx" ON "Comment" USING btree ("postId" text_ops,"createdAt" text_ops);
 CREATE INDEX "Conversation_userAId_lastMessageAt_idx" ON "Conversation" USING btree ("userAId" timestamp_ops,"lastMessageAt" timestamp_ops);

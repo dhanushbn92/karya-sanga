@@ -20,6 +20,11 @@ export const badgeRelations = relations(badge, ({one, many}) => ({
 	earnedBadges: many(earnedBadge),
 }));
 
+// Note: Cohort.ownerId (the workshop owner) is intentionally NOT a relational
+// relation here — it would be a second cohort<->user relationship and force
+// relationNames on the existing primary-membership relation. The owner is
+// fetched with a plain query where needed (see canManageWorkshop / the admin
+// workshop page).
 export const cohortRelations = relations(cohort, ({many}) => ({
 	badges: many(badge),
 	cohortPosts: many(cohortPost),

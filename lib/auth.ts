@@ -1,8 +1,8 @@
 import "server-only";
 import { cache } from "react";
-import { redirect } from "next/navigation";
-import { eq } from "drizzle-orm";
-import { db, user, role } from "@/lib/db";
+import { notFound, redirect } from "next/navigation";
+import { and, eq } from "drizzle-orm";
+import { db, user, cohort, userCohort, role } from "@/lib/db";
 import { createClient } from "@/lib/supabase/server";
 
 export type Role = (typeof role.enumValues)[number];
@@ -119,4 +119,55 @@ export async function requireRole(roles: Role[]): Promise<CurrentUser> {
   const user = await requireUser();
   if (!roles.includes(user.role)) redirect("/dashboard");
   return user;
+}
+
+/**
+ * Can `me` manage a specific workshop? Workshop management is scoped:
+ *   - admins manage every workshop;
+ *   - the workshop's owner (Cohort.ownerId) manages it, whatever their role;
+ *   - an instructor manages a workshop only if they're a member of it
+ *     (primary User.cohortId or a UserCohort row).
+ */
+export async function canManageWorkshop(
+  me: CurrentUser,
+  cohortId: string,
+): Promise<boolean> {
+  if (me.role === "admin") return true;
+
+  const c = await db.query.cohort.findFirst({
+    where: eq(cohort.id, cohortId),
+    columns: { ownerId: true },
+  });
+  if (!c) return false;
+  if (c.ownerId === me.id) return true;
+
+  if (me.role === "instructor") {
+    const primary = await db.query.user.findFirst({
+      where: and(eq(user.id, me.id), eq(user.cohortId, cohortId)),
+      columns: { id: true },
+    });
+    if (primary) return true;
+    const secondary = await db.query.userCohort.findFirst({
+      where: and(
+        eq(userCohort.userId, me.id),
+        eq(userCohort.cohortId, cohortId),
+      ),
+      columns: { id: true },
+    });
+    if (secondary) return true;
+  }
+  return false;
+}
+
+/**
+ * Action/page guard: ensure the signed-in user can manage `cohortId`, else
+ * 404 (so a workshop's existence isn't leaked to non-managers). Returns the
+ * current user for convenience.
+ */
+export async function requireWorkshopManager(
+  cohortId: string,
+): Promise<CurrentUser> {
+  const me = await requireUser();
+  if (!(await canManageWorkshop(me, cohortId))) notFound();
+  return me;
 }
