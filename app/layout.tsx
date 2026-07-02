@@ -3,6 +3,7 @@ import { Geist, JetBrains_Mono, Baloo_2 } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { TopNav } from "@/components/nav/top-nav";
+import { TopNavGate } from "@/components/nav/top-nav-gate";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -47,7 +48,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${jetbrainsMono.variable} ${baloo2.variable} h-full antialiased`}
+      className={`dark ${geistSans.variable} ${jetbrainsMono.variable} ${baloo2.variable} h-full antialiased`}
     >
       <head>
         {/*
@@ -68,7 +69,9 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-full flex flex-col bg-background text-foreground font-sans">
-        <TopNav />
+        <TopNavGate>
+          <TopNav />
+        </TopNavGate>
         {children}
         <Toaster richColors closeButton position="top-right" />
       </body>

@@ -260,8 +260,8 @@ export default async function HackathonPage() {
        * ─────────────────────────────────────────────────────────── */}
       <section className="relative mb-10 overflow-hidden rounded-[36px] border-2 border-outline-variant bg-card p-6 md:p-8">
         <div className="pointer-events-none absolute inset-0">
-          <div className="absolute -left-20 -top-20 h-64 w-64 rounded-full bg-primary-fixed/50 blur-3xl" />
-          <div className="absolute -right-24 -bottom-24 h-64 w-64 rounded-full bg-tertiary-fixed/40 blur-3xl" />
+          <div className="absolute -left-20 -top-20 h-64 w-64 rounded-full bg-[#8c5cff]/25 blur-3xl" />
+          <div className="absolute -right-24 -bottom-24 h-64 w-64 rounded-full bg-[#b14dff]/20 blur-3xl" />
         </div>
         <div className="relative grid grid-cols-1 gap-6 md:grid-cols-12 md:items-center">
           <div className="flex items-start gap-4 md:col-span-7">
@@ -272,7 +272,7 @@ export default async function HackathonPage() {
                   ? `You're on Team ${myMembership!.team.name}! Build something awesome.`
                   : "Let's form your hackathon team!"}
               </SpeechBubble>
-              <h1 className="text-display-md mt-3 text-on-surface">
+              <h1 className="text-display-md mt-3 gradient-text">
                 Hackathon
               </h1>
               <p className="mt-1 text-on-surface-variant">
@@ -778,7 +778,7 @@ export default async function HackathonPage() {
                               : "Member"}
                           </span>
                         ) : (
-                          <span className="text-[10px] text-on-surface-variant/60">
+                          <span className="text-[10px] text-on-surface-variant/80">
                             —
                           </span>
                         )}

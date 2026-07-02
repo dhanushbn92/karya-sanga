@@ -77,7 +77,7 @@ export default async function LeaderboardPage() {
         </span>
         <span className="text-xs font-bold tracking-wide">Leaderboard</span>
       </div>
-      <h1 className="text-headline-lg text-on-surface">Top builds</h1>
+      <h1 className="text-headline-lg gradient-text">Top builds</h1>
       <p className="mt-2 text-on-surface-variant">
         Average of each judge&apos;s total across the four criteria (max 40 per
         judge).

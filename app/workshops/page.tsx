@@ -153,7 +153,7 @@ export default async function WorkshopsPage({
           </span>
           <span className="text-xs font-bold tracking-wide">Workshops</span>
         </div>
-        <h1 className="text-headline-lg text-on-surface">Workshops</h1>
+        <h1 className="text-headline-lg gradient-text">Workshops</h1>
         <p className="mt-2 max-w-2xl text-on-surface-variant">
           Your workshops first, then everything else Karya Sanga is
           running.

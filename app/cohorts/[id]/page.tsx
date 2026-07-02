@@ -426,7 +426,14 @@ export default async function WorkshopPage({
       {/* ──────────────────────────────────────────────────────────
        * 1. HERO
        * ────────────────────────────────────────────────────────── */}
-      <header className="mb-10">
+      <header className="relative mb-10">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -inset-x-4 -top-10 -z-10 h-56 overflow-hidden"
+        >
+          <div className="absolute right-8 top-0 h-56 w-56 rounded-full bg-[#8c5cff]/20 blur-3xl" />
+          <div className="absolute left-1/4 top-6 h-48 w-48 rounded-full bg-[#26d0c2]/12 blur-3xl" />
+        </div>
         <div className="rotate-sticker mb-3 inline-flex items-center gap-2 rounded-full border-2 border-white bg-tertiary-fixed px-3 py-1 text-on-tertiary-fixed shadow-sm">
           <span className="material-symbols-outlined text-[16px]">
             home_storage
@@ -460,7 +467,7 @@ export default async function WorkshopPage({
                 </span>
               )}
             </div>
-            <h1 className="text-headline-lg text-on-surface">{cohort.name}</h1>
+            <h1 className="text-headline-lg gradient-text">{cohort.name}</h1>
             {cohort.description && (
               <p className="mt-2 max-w-3xl text-on-surface-variant">
                 {cohort.description}
@@ -552,7 +559,7 @@ export default async function WorkshopPage({
               <h2 className="text-headline-md mt-2 text-on-primary-fixed">
                 {completedCount} / {totalLessons} lessons · {progressPct}%
               </h2>
-              <div className="mt-3 h-2.5 w-full overflow-hidden rounded-full bg-white/30 md:max-w-md">
+              <div className="mt-3 h-2.5 w-full overflow-hidden rounded-full bg-white/15 md:max-w-md">
                 <div
                   className="h-full rounded-full transition-all"
                   style={{

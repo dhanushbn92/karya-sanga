@@ -77,7 +77,7 @@ export default async function MessagesInboxPage() {
             Messages
           </span>
         </div>
-        <h1 className="text-display-md text-on-surface">Your messages</h1>
+        <h1 className="text-display-md gradient-text">Your messages</h1>
         <p className="mt-2 text-on-surface-variant">
           Reach out to anyone in the workshops. Send a message and they&apos;ll
           see it next time they open their inbox.

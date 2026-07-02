@@ -136,7 +136,7 @@ export default async function WallPage({
             </span>
             <span className="text-xs font-bold tracking-wide">Show &amp; Tell</span>
           </div>
-          <h1 className="text-headline-lg text-on-surface">
+          <h1 className="text-headline-lg gradient-text">
             Show what you&apos;re making
           </h1>
           <p className="mt-2 max-w-2xl text-on-surface-variant">

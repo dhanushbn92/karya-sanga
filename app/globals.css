@@ -176,71 +176,77 @@
 }
 
 /* =====================================================================
- * DARK — "Modern Ashram" (secondary, instructor/admin)
+ * DARK — "Vibrant" (primary going forward)
  *
- * Activated via class="dark" on an element. Saffron primary on deep
- * obsidian, glassmorphic, contemplative. Source: yukti_ai_labs/DESIGN.md.
+ * The whole app runs under class="dark" now. Deep violet-obsidian canvas,
+ * glassmorphic cards, gradient accents in violet (#8c5cff), magenta
+ * (#b14dff) and teal (#26d0c2). Matches the landing page hero.
  * ===================================================================== */
 .dark {
-  --background: #131313;
-  --foreground: #e5e2e1;
-  --card: #201f1f;
-  --card-foreground: #e5e2e1;
-  --popover: #201f1f;
-  --popover-foreground: #e5e2e1;
-  --primary: #ffb4a2;
-  --primary-foreground: #621100;
-  --secondary: #474746;
-  --secondary-foreground: #b7b5b4;
-  --muted: #1c1b1b;
-  --muted-foreground: #ae887f;
-  --accent: #2a2a2a;
-  --accent-foreground: #e5e2e1;
-  --destructive: #ffb4ab;
-  --border: rgba(255, 255, 255, 0.08);
-  --input: rgba(255, 255, 255, 0.10);
-  --ring: #ffb4a2;
+  --background: #0b0a1a;
+  --foreground: #ece9ff;
+  --card: #14112b;
+  --card-foreground: #ece9ff;
+  --popover: #171334;
+  --popover-foreground: #ece9ff;
+  --primary: #8c5cff;
+  --primary-foreground: #ffffff;
+  --secondary: #0e5750;
+  --secondary-foreground: #b3f5ee;
+  --muted: #171334;
+  --muted-foreground: #9a94c9;
+  --accent: #221b47;
+  --accent-foreground: #ece9ff;
+  --destructive: #ff5c74;
+  --border: rgba(255, 255, 255, 0.10);
+  --input: rgba(255, 255, 255, 0.12);
+  --ring: #8c5cff;
 
-  --surface: #131313;
-  --surface-dim: #131313;
-  --surface-bright: #3a3939;
-  --surface-container-lowest: #0e0e0e;
-  --surface-container-low: #1c1b1b;
-  --surface-container: #201f1f;
-  --surface-container-high: #2a2a2a;
-  --surface-container-highest: #353534;
-  --on-surface: #e5e2e1;
-  --on-surface-variant: #e8bdb3;
-  --outline: #ae887f;
-  --outline-variant: #5e3f38;
+  --surface: #0b0a1a;
+  --surface-dim: #08070f;
+  --surface-bright: #1c1740;
+  --surface-container-lowest: #08070f;
+  --surface-container-low: #110f26;
+  --surface-container: #14112b;
+  --surface-container-high: #1a1638;
+  --surface-container-highest: #221b47;
+  --on-surface: #ece9ff;
+  --on-surface-variant: #b9b3e0;
+  --outline: #6f6a95;
+  --outline-variant: rgba(255, 255, 255, 0.10);
 
-  --on-primary: #621100;
-  --primary-container: #ff562c;
-  --on-primary-container: #560e00;
-  --primary-fixed: #ffdad2;
-  --primary-fixed-dim: #ffb4a2;
-  --on-primary-fixed: #3c0700;
-  --on-primary-fixed-variant: #8a1d00;
-  --inverse-primary: #b42800;
+  /* primary — violet. Container/fixed are DARK surfaces (they sit on the
+   * dark canvas) and the on-* colours are LIGHT, so both "surface + on-text"
+   * and a bare on-* used as accent text stay readable on dark. */
+  --on-primary: #ffffff;
+  --primary-container: #2a1b5c;
+  --on-primary-container: #d9ccff;
+  --primary-fixed: #2a1b5c;
+  --primary-fixed-dim: #3b2680;
+  --on-primary-fixed: #e7ddff;
+  --on-primary-fixed-variant: #c3b0ff;
+  --inverse-primary: #5a37b8;
 
-  --secondary-container: #474746;
-  --on-secondary-container: #b7b5b4;
-  --secondary-fixed: #e5e2e1;
-  --secondary-fixed-dim: #c8c6c5;
-  --on-secondary-fixed: #1c1b1b;
-  --on-secondary-fixed-variant: #474746;
+  /* secondary — teal */
+  --secondary-container: #0c3f3a;
+  --on-secondary-container: #8af5ea;
+  --secondary-fixed: #0c3f3a;
+  --secondary-fixed-dim: #12564f;
+  --on-secondary-fixed: #b3f5ee;
+  --on-secondary-fixed-variant: #6fe4d8;
 
-  --tertiary: #ddb7ff;
-  --tertiary-container: #b76dff;
-  --on-tertiary: #490080;
-  --on-tertiary-container: #400071;
-  --tertiary-fixed: #f0dbff;
-  --tertiary-fixed-dim: #ddb7ff;
-  --on-tertiary-fixed: #2c0051;
-  --on-tertiary-fixed-variant: #6900b3;
+  /* tertiary — magenta */
+  --tertiary: #d08bff;
+  --tertiary-container: #3d1266;
+  --on-tertiary: #ffffff;
+  --on-tertiary-container: #f0dbff;
+  --tertiary-fixed: #3d1266;
+  --tertiary-fixed-dim: #551a8c;
+  --on-tertiary-fixed: #f0dbff;
+  --on-tertiary-fixed-variant: #dcb0ff;
 
-  --inverse-surface: #e5e2e1;
-  --inverse-on-surface: #313030;
+  --inverse-surface: #ece9ff;
+  --inverse-on-surface: #1a1638;
 }
 
 @layer base {
@@ -285,7 +291,24 @@
     background-position: 0 0;
   }
   .dark body {
-    background-image: none;
+    /* Vibrant canvas — deep violet glow top-left, subtle teal lift bottom,
+     * fixed so it stays put while content scrolls. */
+    background-color: #0b0a1a;
+    background-image:
+      radial-gradient(
+        120% 90% at 6% -8%,
+        #34206b 0%,
+        rgba(26, 19, 64, 0.55) 38%,
+        rgba(11, 10, 26, 0) 68%
+      ),
+      radial-gradient(
+        90% 70% at 100% 6%,
+        rgba(38, 208, 194, 0.10) 0%,
+        rgba(11, 10, 26, 0) 55%
+      );
+    background-attachment: fixed;
+    background-size: cover;
+    background-position: 0 0;
   }
   /* Headings — Baloo 2, rounded + friendly */
   h1, h2, h3, h4, h5, h6 {
@@ -469,25 +492,117 @@
   }
 
   /* =====================================================================
+   * Vibrant dark overrides — the whole app runs under .dark now, so the
+   * Youth "sticker"/gradient/soft-card utilities are retuned here to glass
+   * + glow instead of light-mode colored offsets. Every page that uses
+   * these classes inherits the vibrant look with no per-file edits.
+   * ===================================================================== */
+  .dark .soft-card {
+    background-color: rgba(255, 255, 255, 0.045);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    box-shadow:
+      0 1px 0 0 rgba(255, 255, 255, 0.04) inset,
+      0 24px 48px -28px rgba(0, 0, 0, 0.7);
+  }
+  .dark .soft-card:hover {
+    border-color: rgba(140, 92, 255, 0.45);
+    box-shadow:
+      0 1px 0 0 rgba(255, 255, 255, 0.06) inset,
+      0 0 0 1px rgba(140, 92, 255, 0.15),
+      0 28px 56px -28px rgba(140, 92, 255, 0.35);
+  }
+
+  /* Sticker shadows → soft ambient glows in the accent colour */
+  .dark .sticker-shadow,
+  .dark .sticker-shadow-sm {
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.06),
+      0 18px 40px -20px rgba(140, 92, 255, 0.5);
+  }
+  .dark .sticker-shadow-teal {
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.06),
+      0 18px 40px -20px rgba(38, 208, 194, 0.5);
+  }
+  .dark .sticker-shadow-purple {
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.06),
+      0 18px 40px -20px rgba(177, 77, 255, 0.5);
+  }
+  .dark .sticker-hover:hover {
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.1),
+      0 8px 20px -8px rgba(140, 92, 255, 0.4);
+    transform: translateY(-2px);
+  }
+
+  /* Brand gradients remapped to the vibrant palette under dark */
+  .dark .gradient-saffron {
+    background-image: linear-gradient(135deg, #8c5cff 0%, #b14dff 100%);
+  }
+  .dark .gradient-warm {
+    background-image: linear-gradient(135deg, #8c5cff 0%, #b14dff 50%, #26d0c2 100%);
+  }
+  .dark .gradient-teal {
+    background-image: linear-gradient(135deg, #26d0c2 0%, #0e7d73 100%);
+  }
+  .dark .gradient-purple {
+    background-image: linear-gradient(135deg, #b14dff 0%, #7a1fd0 100%);
+  }
+
+  /* Reusable helpers for the vibrant surfaces (use directly on new markup) */
+  .glass {
+    background-color: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+  }
+  .gradient-text {
+    background-image: linear-gradient(115deg, #ffffff 20%, #a78bff 58%, #26d0c2 100%);
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
+  }
+  .btn-gradient {
+    background-image: linear-gradient(135deg, #8c5cff, #b14dff);
+    color: #ffffff;
+    box-shadow: 0 12px 30px -10px rgba(140, 92, 255, 0.5);
+  }
+  /* Subtle violet glow on hover — pairs with any card that also lifts. */
+  .hover-glow {
+    transition:
+      box-shadow var(--motion-base) var(--ease-out-soft),
+      transform var(--motion-base) var(--ease-out-soft),
+      border-color var(--motion-base) var(--ease-out-soft);
+  }
+  .dark .hover-glow:hover {
+    box-shadow: 0 22px 55px -24px rgba(140, 92, 255, 0.55);
+  }
+
+  /* =====================================================================
    * Modern Ashram utilities (preserved for .dark routes)
    * ===================================================================== */
   .glass-card {
-    background-color: rgba(32, 31, 31, 0.6);
+    background-color: rgba(20, 17, 43, 0.6);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
   }
+  /* Legacy names (were saffron in the old Modern Ashram theme) — retuned to
+   * the vibrant violet/magenta glow so presenter/deck modes match the app. */
   .saffron-glow {
-    box-shadow: 0 0 40px -10px rgba(255, 180, 162, 0.35);
+    box-shadow: 0 0 44px -10px rgba(140, 92, 255, 0.42);
   }
   .saffron-glow-strong {
-    box-shadow: 0 0 60px -10px rgba(255, 86, 44, 0.45);
+    box-shadow: 0 0 64px -10px rgba(177, 77, 255, 0.5);
   }
   .light-trail {
     background: linear-gradient(
       90deg,
       transparent,
-      rgba(255, 180, 162, 0.7),
+      rgba(140, 92, 255, 0.7),
       transparent
     );
     height: 1px;

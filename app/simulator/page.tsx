@@ -94,7 +94,7 @@ export default async function SimulatorPage() {
               Logic & Maker Lab
             </span>
           </div>
-          <h1 className="text-headline-lg text-on-surface">
+          <h1 className="text-headline-lg gradient-text">
             Build circuits without breaking anything.
           </h1>
           <p className="max-w-2xl text-on-surface-variant">

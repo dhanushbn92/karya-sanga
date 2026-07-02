@@ -174,7 +174,7 @@ export default async function LessonsIndexPage({
             Lesson library
           </span>
         </div>
-        <h1 className="text-headline-lg text-on-surface">Lessons</h1>
+        <h1 className="text-headline-lg gradient-text">Lessons</h1>
         <p className="mt-2 max-w-2xl text-on-surface-variant">
           All the lessons we&apos;ve made. Workshops pick the chapters they
           want — the same chapter can show up in many workshops.
@@ -209,7 +209,7 @@ export default async function LessonsIndexPage({
                     {totalDone} / {totalLessons} · {percent}%
                   </span>
                 </div>
-                <div className="h-2 w-full overflow-hidden rounded-full bg-white/30">
+                <div className="h-2 w-full overflow-hidden rounded-full bg-white/15">
                   <div
                     className="h-full rounded-full transition-all"
                     style={{

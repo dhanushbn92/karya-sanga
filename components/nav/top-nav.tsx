@@ -38,7 +38,7 @@ export async function TopNav() {
       user.role === "judge");
 
   return (
-    <nav className="sticky top-0 z-50 w-full border-b border-outline-variant/60 bg-background/85 backdrop-blur-xl supports-[backdrop-filter]:bg-background/70">
+    <nav className="sticky top-0 z-50 w-full border-b border-white/10 bg-[#0b0a1a]/80 backdrop-blur-xl supports-[backdrop-filter]:bg-[#0b0a1a]/60">
       <div className="mx-auto flex h-16 w-full max-w-[1280px] items-center justify-between gap-6 px-4 md:px-12">
         <Link
           href={user ? "/dashboard" : "/"}
@@ -69,7 +69,7 @@ export async function TopNav() {
                 <li key={l.href}>
                   <Link
                     href={l.href}
-                    className="press-soft rounded-full px-3.5 py-2 text-sm font-semibold text-on-surface-variant transition-colors hover:bg-primary-fixed/60 hover:text-on-primary-fixed-variant"
+                    className="press-soft rounded-full px-3.5 py-2 text-sm font-semibold text-on-surface-variant transition-colors hover:bg-white/10 hover:text-white"
                   >
                     {l.label}
                   </Link>
@@ -79,7 +79,7 @@ export async function TopNav() {
                 <li>
                   <Link
                     href="/admin/hackathon/judge"
-                    className="press-soft rounded-full px-3.5 py-2 text-sm font-semibold text-on-surface-variant transition-colors hover:bg-primary-fixed/60 hover:text-on-primary-fixed-variant"
+                    className="press-soft rounded-full px-3.5 py-2 text-sm font-semibold text-on-surface-variant transition-colors hover:bg-white/10 hover:text-white"
                   >
                     Judging
                   </Link>
@@ -89,7 +89,7 @@ export async function TopNav() {
                 <li>
                   <Link
                     href="/admin"
-                    className="press-soft rounded-full px-3.5 py-2 text-sm font-semibold text-on-surface-variant transition-colors hover:bg-primary-fixed/60 hover:text-on-primary-fixed-variant"
+                    className="press-soft rounded-full px-3.5 py-2 text-sm font-semibold text-on-surface-variant transition-colors hover:bg-white/10 hover:text-white"
                   >
                     Admin
                   </Link>
@@ -114,7 +114,7 @@ export async function TopNav() {
                 <li key={l.href}>
                   <Link
                     href={l.href}
-                    className="press-soft rounded-full px-3.5 py-2 text-sm font-semibold text-on-surface-variant transition-colors hover:bg-primary-fixed/60 hover:text-on-primary-fixed-variant"
+                    className="press-soft rounded-full px-3.5 py-2 text-sm font-semibold text-on-surface-variant transition-colors hover:bg-white/10 hover:text-white"
                   >
                     {l.label}
                   </Link>
@@ -124,13 +124,13 @@ export async function TopNav() {
             <div className="flex items-center gap-3">
               <Link
                 href="/login"
-                className="press-soft hidden rounded-full px-4 py-2 text-sm font-semibold text-on-surface-variant transition-colors hover:bg-primary-fixed/60 hover:text-on-primary-fixed-variant md:inline-block"
+                className="press-soft hidden rounded-full px-4 py-2 text-sm font-semibold text-on-surface-variant transition-colors hover:bg-white/10 hover:text-white md:inline-block"
               >
                 Login
               </Link>
               <Link
                 href="/signup"
-                className="press-soft sticker-shadow inline-flex items-center gap-1.5 rounded-full bg-primary px-5 py-2 text-sm font-semibold text-on-primary"
+                className="press-soft btn-gradient inline-flex items-center gap-1.5 rounded-full px-5 py-2 text-sm font-semibold text-white"
               >
                 <span className="material-symbols-outlined text-[16px]">
                   rocket_launch

@@ -90,7 +90,7 @@ export function LoginForm() {
         <button
           type="submit"
           disabled={isPending}
-          className="sticker-shadow inline-flex w-full items-center justify-center rounded-full bg-primary px-6 py-3 font-bold text-on-primary transition-transform active:scale-95 disabled:opacity-60"
+          className="btn-gradient inline-flex w-full items-center justify-center rounded-full px-6 py-3 font-bold text-white transition-transform active:scale-95 disabled:opacity-60"
         >
           {isPending ? "Signing in…" : "Sign in"}
         </button>

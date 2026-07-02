@@ -212,9 +212,9 @@ export default async function HomePage() {
        * ============================================================ */}
       <section className="relative overflow-hidden">
         <div className="pointer-events-none absolute inset-0">
-          <div className="absolute -left-24 top-6 h-80 w-80 rounded-full bg-secondary-container/40 blur-3xl" />
-          <div className="absolute -right-24 top-6 h-80 w-80 rounded-full bg-primary-fixed/50 blur-3xl" />
-          <div className="absolute left-1/2 bottom-0 h-72 w-72 -translate-x-1/2 rounded-full bg-tertiary-fixed/40 blur-3xl" />
+          <div className="absolute -left-24 top-6 h-80 w-80 rounded-full bg-[#26d0c2]/20 blur-3xl" />
+          <div className="absolute -right-24 top-6 h-80 w-80 rounded-full bg-[#8c5cff]/25 blur-3xl" />
+          <div className="absolute left-1/2 bottom-0 h-72 w-72 -translate-x-1/2 rounded-full bg-[#b14dff]/20 blur-3xl" />
         </div>
 
         <div className="relative mx-auto w-full max-w-[1280px] px-4 pt-8 pb-6 md:px-12 md:pt-12">
@@ -268,7 +268,7 @@ export default async function HomePage() {
                 </SpeechBubble>
                 <h1 className="text-display-md mt-4 text-on-surface">
                   Welcome back,{" "}
-                  <span className="text-primary">{displayName}</span>.
+                  <span className="gradient-text">{displayName}</span>.
                 </h1>
               </div>
             </div>
@@ -793,6 +793,11 @@ function ExploreCard({
     secondary: "bg-secondary-container",
     tertiary: "bg-tertiary-fixed",
   }[tone];
+  const ink = {
+    primary: "text-on-primary-fixed",
+    secondary: "text-on-secondary-container",
+    tertiary: "text-on-tertiary-fixed",
+  }[tone];
   return (
     <Link
       href={href}
@@ -801,7 +806,7 @@ function ExploreCard({
       <span
         className={`inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${bg}`}
       >
-        <span className="material-symbols-outlined text-2xl text-on-surface/50">
+        <span className={`material-symbols-outlined text-2xl ${ink}`}>
           {icon}
         </span>
       </span>

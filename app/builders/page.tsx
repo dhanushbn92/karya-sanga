@@ -113,7 +113,7 @@ export default async function BuildersPage({
               People
             </span>
           </div>
-          <h1 className="text-headline-lg text-on-surface">
+          <h1 className="text-headline-lg gradient-text">
             The people behind every project
           </h1>
           <p className="mt-2 max-w-2xl text-on-surface-variant">

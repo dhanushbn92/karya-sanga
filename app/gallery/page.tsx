@@ -174,7 +174,7 @@ export default async function GalleryPage({
           </span>
           <span className="text-xs font-bold tracking-wide">Projects</span>
         </div>
-        <h1 className="text-headline-lg text-on-surface">
+        <h1 className="text-headline-lg gradient-text">
           Built by everyone at Karya Sanga
         </h1>
         <p className="mt-2 max-w-2xl text-on-surface-variant">
@@ -198,7 +198,7 @@ export default async function GalleryPage({
           </div>
           <Link
             href={`/gallery/${myTeamProject.id}`}
-            className="sticker-shadow group block rounded-[28px] border-2 border-secondary bg-secondary-container p-6 text-on-secondary-container transition-transform hover:-translate-y-1 md:p-7"
+            className="sticker-shadow hover-glow group block rounded-[28px] border-2 border-secondary bg-secondary-container p-6 text-on-secondary-container transition-transform hover:-translate-y-1 md:p-7"
           >
             <div className="grid grid-cols-1 gap-5 md:grid-cols-12 md:items-center">
               <div className="md:col-span-9">
@@ -280,7 +280,7 @@ export default async function GalleryPage({
           </div>
           <Link
             href={`/gallery/${featuredOne.id}`}
-            className="sticker-shadow group block rounded-[28px] border-2 border-primary bg-primary-fixed p-6 text-on-primary-fixed transition-transform hover:-translate-y-1 md:p-7"
+            className="sticker-shadow hover-glow group block rounded-[28px] border-2 border-primary bg-primary-fixed p-6 text-on-primary-fixed transition-transform hover:-translate-y-1 md:p-7"
           >
             <div className="grid grid-cols-1 gap-5 md:grid-cols-12 md:items-center">
               <div className="md:col-span-9">
@@ -490,7 +490,7 @@ export default async function GalleryPage({
               <Link
                 key={p.id}
                 href={`/gallery/${p.id}`}
-                className={`group flex flex-col rounded-[24px] border-2 bg-card p-5 transition-all hover:-translate-y-1 hover:border-primary ${
+                className={`hover-glow group flex flex-col rounded-[24px] border-2 bg-card p-5 transition-all hover:-translate-y-1 hover:border-primary ${
                   isMine
                     ? "border-secondary/40 ring-2 ring-secondary/10"
                     : "border-outline-variant"
